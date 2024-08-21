@@ -1,3 +1,5 @@
+
+# SEEM_Chebyshev_master/grid_data2.py
 import numpy as np;
 from matplotlib import pyplot as plt
 from delta import dirac, dvdirac
