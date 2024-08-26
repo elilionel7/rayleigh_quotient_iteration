@@ -16,11 +16,12 @@ from print_results import make_graph, make_chart
 def main():
     
     # f = lambda x, y: np.ones_like(x)  
-    g = lambda x, y: np.zeros_like(x)  
+    # g = lambda x, y: np.zeros_like(x) 
+    exact_sol = lambda x, y: x**3 + y**3 
 
     results = dict()
-    results['p'] = [1, 2, 3, 4, 5, 6]
-    results['pts'] = [8, 12, 16, 20, 24, 28, 32, 36]
+    results['p'] = [1,2,3]#[1, 2, 3, 4, 5, 6]
+    results['pts'] = [8,12,16] #[8, 12, 16, 20, 24, 28, 32, 36]
 
     results['L2'] = np.zeros((np.size(results['p']), np.size(results['pts'])))
     results['inf'] = np.zeros_like(results['L2'])
@@ -36,12 +37,11 @@ def main():
                               [lambda x: .95 * np.cos(x), lambda y: .95 * np.sin(y)],
                               results['p'][l], precond=False, order='spectral')
             odata = RayleighOperator(gdata, results['p'][l], precond=False)
-            sol = g(gdata.x1, gdata.x2)
+            sol = exact_sol(gdata.x1, gdata.x2)
             
-            # Solve the problem using Rayleigh Quotient Iteration
             tic = time.time()
            
-            u, eigenvalue, _ = odata.rayleigh_quotient_iteration(g,results['p'][l])
+            u, eigenvalue, _ = odata.iter_solver(results['p'][l])
            
             toc = time.time()
 

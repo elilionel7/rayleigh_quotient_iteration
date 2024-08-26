@@ -45,7 +45,7 @@ def main():
             tic = time.time()
             u, cond = odata.qr_solve(f, g, results['p'][l])
             toc = time.time()
-            print(tedr)
+            
             # Calculate errors
             u = np.reshape(u, (gdata.m, gdata.m))
             results['intpts'][k] = gdata.k
