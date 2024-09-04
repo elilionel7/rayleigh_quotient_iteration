@@ -45,9 +45,10 @@ def main():
 
             tic = time.time()
 
-            u, cond, _ = odata.iter_solver_shift(results["p"][l],2)
+            shift_results = odata.iter_solver_variable_shift(l, [1, 2, 3])
 
             toc = time.time()
+            u, cond = shift_results[1][0]
 
             # Calculate errors
             u = np.reshape(u, (gdata.m, gdata.m))
@@ -62,8 +63,8 @@ def main():
                 np.abs(u[gdata.flag] - sol[gdata.flag])
             ) / np.max(np.abs(u[gdata.flag]))
 
-    np.save("exp1_results.npy", results)
-    make_graph(results, "exp1_pseu.pdf")
+    np.save("exp1_v3results.npy", results)
+    make_graph(results, "exp1_v3pseu.pdf")
     make_chart(results)
 
 
