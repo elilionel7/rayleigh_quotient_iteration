@@ -103,11 +103,8 @@ class operator_data:
         return m
     def qr_solve(self,interior,boundary,l):
         rhs1 = interior(self.gdata.x1[self.gdata.flag],self.gdata.x2[self.gdata.flag])
-        print(rhs1.shape)
         rhs2 = boundary(self.gdata.b[:,0],self.gdata.b[:,1])
-        print(rhs2.shape)
         rhs = np.hstack((rhs1,rhs2))
-        print(rhs.shape)
         rct = self.make_rct_matrix(l)
         cond = np.linalg.cond(rct)
         Q,R = np.linalg.qr(rct)

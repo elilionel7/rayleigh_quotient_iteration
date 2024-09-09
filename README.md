@@ -24,6 +24,13 @@
   - variable shift on the intetior
 ### 4. `rayleigh_operator.py`
 
+
+### 4. `exmp1_v4.py`
+
+
+- **Description**: 
+  - performs rqi
+
 - **Description**: 
   - This script defines the `RayleighOperator` class, inherits the `operator_data` class from the original code. It has the `iter_solver` method, which is used to solve PDEs by iteratively solving the pde through Rayleigh Quotient Iteration by calling the qr_solve2 to update u.
 
