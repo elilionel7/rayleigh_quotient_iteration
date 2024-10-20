@@ -58,10 +58,19 @@ class operator_data:
     def Ct(self,w):
         z = np.zeros((self.gdata.m,self.gdata.m))
         z[self.gdata.flag] = w[:self.gdata.k]
-        z = self.lapt(z) + self.lapt(z.T).T
+        z = self.lapt(z) + self.lapt(z.T).T 
         z = z.flatten()
         z += self.gdata.xxT.dot(w[-self.gdata.p:])
         return z
+    
+    def Ct_shift(self, w, shift): #update from last week meeting
+        z = np.zeros((self.gdata.m, self.gdata.m))
+        z[self.gdata.flag] = w[:self.gdata.k]
+        z = self.lapt(z) + self.lapt(z.T).T - shift * z
+        z = z.flatten()
+        z += self.gdata.xxT.dot(w[-self.gdata.p:])
+        return z
+    
     def M(self,w):
         w = self.Ct(w)
         w = self.ker(w)
@@ -104,6 +113,7 @@ class operator_data:
     def qr_solve(self,interior,boundary,l):
         rhs1 = interior(self.gdata.x1[self.gdata.flag],self.gdata.x2[self.gdata.flag])
         rhs2 = boundary(self.gdata.b[:,0],self.gdata.b[:,1])
+        
         rhs = np.hstack((rhs1,rhs2))
         rct = self.make_rct_matrix(l)
         cond = np.linalg.cond(rct)
@@ -116,9 +126,12 @@ class operator_data:
         u = self.ker(u,l).flatten()
 
         return u,cond
+   
     def qr_solve2(self,interior,boundary,l):
         rhs1 = interior(self.gdata.x1[self.gdata.flag],self.gdata.x2[self.gdata.flag])
         rhs2 = boundary(self.gdata.g_grid)
+        print("rhs2 shape: ", rhs2.shape)
+        print("rhs1 shape: ", rhs1.shape)
         rhs = np.hstack((rhs1,rhs2))
         rct = self.make_rct_matrix(l)
         cond = np.linalg.cond(rct)
@@ -129,6 +142,39 @@ class operator_data:
         u = self.ker(u,l).flatten()
         return u,cond
     
+    # def qrSolve_shift(self, rhs1, l, shift):
+    #     # Build the operator matrix including the shift
+    #     rhs2 = np.zeros(self.gdata.p)   
+    #     rhs = np.hstack((rhs1,rhs2))
+    #     rct = self.make_rct_matrix_shift(l, shift)
+
+    #     cond = np.linalg.cond(rct)
+
+    #     Q, R = np.linalg.qr(rct)
+
+    #     # Solve the system
+    #     y = np.dot(Q.T, rhs)
+    #     u = scipy.linalg.solve_triangular(R, y)
+
+    #     return u, cond
+
+    def qrSolve_shift(self, rhs1, l, shift):
+        rct = self.make_rct_matrix_shift(l, shift)  # Shape (64, 34)
+        # rhs1 = np.zeros(self.gdata.k)  # Shape (34,)
+        print("rhs1 shape: ", rhs1.shape)
+        rhs2 = np.zeros(self.gdata.p)  # Shape (34,)
+        print("rhs2 shape: ", rhs2.shape)
+        
+        rhs = np.hstack((rhs1, rhs2)) 
+        cond = np.linalg.cond(rct)
+        Q,R = np.linalg.qr(rct)
+        u = scipy.linalg.solve_triangular(R.T,rhs,lower=True)
+        u = np.dot(Q,u)
+        u = np.reshape(u,(self.gdata.m,self.gdata.m))
+        u = self.ker(u,l).flatten()
+        return u, cond
+
+    
     def make_rct_matrix(self,l):
         m = np.zeros((self.gdata.m**2,self.gdata.k+self.gdata.p))
         for i in range(0,self.gdata.k+self.gdata.p):
@@ -137,6 +183,20 @@ class operator_data:
             z = self.ker(self.Ct(z),l).flatten()
             m[:,i] = z
         return m
+    
+    def make_rct_matrix_shift(self, l, shift):
+        m = np.zeros((self.gdata.m**2, self.gdata.k + self.gdata.p))
+        for i in range(0, self.gdata.k + self.gdata.p):
+            z = np.zeros(self.gdata.k + self.gdata.p)
+            z[i] = 1
+            z = self.ker(self.Ct_shift(z, shift), l).flatten()
+            m[:, i] = z
+        return m
+    
+    
+
+    
+    
     
 
 def PCG(MM,PP,rhs,tol=1e-8):

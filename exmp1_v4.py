@@ -50,6 +50,7 @@ def main():
             tic = time.time()
 
             u, cond, iterations = odata.rayleigh_quotient_iteration(l)
+            # u, cond, iterations = odata.rqi_integration(l)
 
             toc = time.time()
 

@@ -32,7 +32,7 @@ def main():
             sol = g(gdata.x1,gdata.x2)
             ''' The following method computes the matrix implicitly and uses the PCG solver.'''
             tic = time.time() 
-            u, cond = odata.qr_solve(f,g,results['p'][l])
+            u, cond = odata.qr_solve2(f,g,results['p'][l])
             toc = time.time()
             ''' Calculate errors.'''
             u = np.reshape(u,(gdata.m,gdata.m))
@@ -99,3 +99,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

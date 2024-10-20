@@ -2,10 +2,11 @@
 import sys
 import os
 
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "SEEM_Chebyshev_master"))
 
 from collections import defaultdict
-
+import pandas as pd
 import numpy as np
 from operator_data import operator_data
 from scipy.fftpack import dct as dct
@@ -15,6 +16,13 @@ from scipy.fftpack import idctn as idctn
 from scipy.fftpack import dst as dst
 from scipy.fftpack import idst as idst
 from scipy.sparse.linalg import LinearOperator
+from scipy.integrate import simps
+from scipy.interpolate import interp2d, RectBivariateSpline
+from scipy.interpolate import griddata
+from scipy.integrate import simps
+from scipy.sparse.linalg import LinearOperator, gmres
+
+
 import scipy
 
 
@@ -22,166 +30,82 @@ class RayleighOperator(operator_data):
     def __init__(self, gdata, p, precond=False):
         super().__init__(gdata, p, precond)
 
-    def make_rct_matrix_square(self, l):
-        total_points = self.gdata.k + self.gdata.p
-        m = np.zeros((total_points, total_points))
 
-        for i in range(total_points):
-            z = np.zeros(total_points)
-            z[i] = 1
+    def a_u(self, u, l):
+        # u_full_grid = np.zeros(self.gdata.m**2)
+        # u_full_grid[self.gdata.flag.flatten()] = u  
+        u_full = u.reshape(self.gdata.x1.shape)  
 
-            z_transformed = self.ker(self.Ct(z), l).flatten()
+        Au_full_grid = self.ker(u_full, l)
 
-            if z_transformed.shape[0] > total_points:
-                z_transformed = z_transformed[:total_points]
-            elif z_transformed.shape[0] < total_points:
-                z_transformed = np.pad(
-                    z_transformed,
-                    (0, total_points - z_transformed.shape[0]),
-                    mode="constant",
-                )
+        return Au_full_grid  
+        
 
-            m[:, i] = z_transformed
+    #### RQI integration
 
-        return m
+    def interpolate_solution(self, x, y, sols):
+        x = x.flatten()
+        y = y.flatten()
+        values = sols.flatten()
 
-    def qrSolve(self, rhs1, l):
-        rhs2 = np.zeros_like(self.gdata.b[:, 0])
-        rhs = np.hstack((rhs1, rhs2))
+        pnts = np.column_stack((x, y))
 
-        rct = self.make_rct_matrix(l)
+        def interp_func(xi, yi):
+            xi = np.asarray(xi).flatten()
+            yi = np.asarray(yi).flatten()
+            # Perform interpolation
+            zi = griddata(pnts, values, (xi, yi), method="cubic")
+            return zi
 
-        cond = np.linalg.cond(rct)
+        return interp_func
 
-        Q, R = np.linalg.qr(rct)
-        u = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
-        u = np.dot(Q, u)
-        u = np.reshape(u, (self.gdata.m, self.gdata.m))
-        u = self.ker(u, l).flatten()
+    def integrate_function(self, f_values, weights):
+        f_values = f_values.flatten()
+        weights = weights.flatten()
+        integral = np.sum(f_values * weights)
+        return integral
 
-        return u, cond
+    def rq_int(self, u_full, Au_full):
+        eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
+        weights = self.gdata.weights
 
-    def qrSolve2(self, rhs1, l):
-        rhs2 = np.zeros_like(self.gdata.b[:, 0])
-        rhs = np.hstack((rhs1, rhs2))
+        u_interp_func = self.interpolate_solution(self.gdata.x1, self.gdata.x2, u_full)
+        u_eval = u_interp_func(eval_xi, eval_yi)
 
-        rct = self.make_rct_matrix(l)
-        cond = np.linalg.cond(rct)
-        Q, R = np.linalg.qr(rct)
-        u = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
-        u = np.dot(Q, u)
-        u = np.reshape(u, (self.gdata.m, self.gdata.m))
-        u = self.ker(u, l).flatten()
+        Au_interp_func = self.interpolate_solution(
+            self.gdata.x1, self.gdata.x2, Au_full
+        )
+        Au_eval = Au_interp_func(eval_xi, eval_yi)
 
-        return u, cond
+        # Compute numerator and denominator
+        numerator = np.sum(weights * u_eval * Au_eval)
+        denominator = np.sum(weights * u_eval * u_eval)
 
-    def iter_solver(self, l, tol=1e-8, max_iter=100):
-        rhs1 = np.ones_like(self.gdata.x1[self.gdata.flag])
+        return numerator / denominator
 
-        for iter in range(max_iter):
-            u, cond = self.qrSolve(rhs1, l)
-
-            u /= np.linalg.norm(u)
-
-            u_reshaped = np.reshape(u, (self.gdata.m, self.gdata.m))
-            new_rhs1 = u_reshaped[self.gdata.flag]
-
-            if np.linalg.norm(new_rhs1 - rhs1) < tol:
-                return u, cond, iter + 1
-
-            rhs1 = new_rhs1
-
-        return u, cond
-
-    def qrSolve_shift(self, rhs1, l, shift=5):
-        rhs2 = np.zeros_like(self.gdata.b[:, 0])
-        rhs = np.hstack((rhs1, rhs2))
-
-        rct = self.make_rct_matrix(l)
-
-        rct_shifted = rct.copy()
-        for row in range(len(rhs1)):
-            rct_shifted[row][row] -= shift
-
-        cond = np.linalg.cond(rct_shifted)
-
-        Q, R = np.linalg.qr(rct_shifted)
-        u = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
-        u = np.dot(Q, u)
-        u = np.reshape(u, (self.gdata.m, self.gdata.m))
-        u = self.ker(u, l).flatten()
-
-        return u, cond
-
-    def iter_solver_shift(self, l, tol=1e-8, max_iter=100, shift=0.0):
-        rhs1 = np.ones_like(self.gdata.x1[self.gdata.flag])
+    def rq_int_iter(self, l, tol=1e-8, max_iter=100):
+        rhs1 = np.ones(self.gdata.k)
+        print(f'rhs1 shape : {rhs1.shape}')  
+        shift = 0.0
 
         for iter in range(max_iter):
             u, cond = self.qrSolve_shift(rhs1, l, shift)
-
             u /= np.linalg.norm(u)
+           
+            print(f'u shape : {u.shape}')
 
-            u_reshaped = np.reshape(u, (self.gdata.m, self.gdata.m))
-            new_rhs1 = u_reshaped[self.gdata.flag]
+            Au_full_grid = self.a_u(u, l)
 
-            if np.linalg.norm(new_rhs1 - rhs1) < tol:
-                return u, cond, iter + 1
+            lambdaU_new = self.rq_int(u, Au_full_grid)
 
-            rhs1 = new_rhs1
+            if np.abs(lambdaU_new - shift) < tol:
+                print(f"Converged after {iter+1} iterations.")
+                return u, lambdaU_new, iter + 1
 
-        return u, cond, iter + 1
-
-    def iter_solver_variable_shift(self, l, shifts, tol=1e-8, max_iter=100):
-        results = defaultdict(list)
-        for shift in shifts:
-            u, cond, _ = self.iter_solver_shift(
-                l, tol=tol, max_iter=max_iter, shift=shift
-            )
-            results[shift].append((u, cond))
-
-        return results
-
-    def rayleigh_quotient(self, u, A):
-        u = u.flatten()
-
-        num = np.dot(u.T, np.dot(A, u))  # u^T A u
-        denom = np.dot(u.T, u)  # u^T u
-        return num / denom
-
-    def solve_shifted_system(self, A, shift, rhs1, rhs2):
-        rhs = np.hstack((rhs1, rhs2))
-
-        A_shifted = A.copy()
-
-        int_len = len(rhs1)
-        for row in range(int_len):
-            A_shifted[row, row] -= shift
-        u = np.linalg.solve(A_shifted, rhs)
-
-        return u
-
-    def rayleigh_quotient_iteration(self, l, tol=1e-8, max_iter=100):
-        A = self.make_rct_matrix_square(l)
-
-        u = np.random.rand(A.shape[1])
-        u /= np.linalg.norm(u)
-
-        rhs1 = np.ones_like(self.gdata.x1[self.gdata.flag])
-        rhs2 = np.zeros_like(self.gdata.b[:, 0])
-
-        lambdaU = self.rayleigh_quotient(u, A)
-
-        for iter in range(max_iter):
-            u_new = self.solve_shifted_system(A, lambdaU, rhs1, rhs2)
-
-            u_new /= np.linalg.norm(u_new)
-
-            lambdaU_new = self.rayleigh_quotient(u_new, A)
-
-            if np.abs(lambdaU_new - lambdaU) < tol and np.linalg.norm(u_new - u) < tol:
-                return u_new, lambdaU_new, iter + 1
-
-            u = u_new
-            lambdaU = lambdaU_new
-
+            shift = lambdaU_new
+            print(f'shift : {shift}')
+           
+            rhs1 = u[:self.gdata.k].copy()
+           
+        print("Maximum iterations reached without convergence.")
         return u, lambdaU_new, max_iter

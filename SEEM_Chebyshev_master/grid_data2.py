@@ -4,18 +4,80 @@ import numpy as np;
 from matplotlib import pyplot as plt
 from delta import dirac, dvdirac
 from scipy.sparse import vstack as sparseVstack
+from numpy.polynomial.legendre import leggauss
 from CSSEM import get_h
 import scipy
+
+def trapezoidal_weights(n, a=0.0, b=2 * np.pi):
+    
+    h = (b - a) / (n - 1)
+    w = np.full(n, h)
+    w[0] = w[-1] = h / 2
+    return w
+
+
+# def radial_nodes_and_weights(nr, r0=0.0, r1=1.0):
+#     r = np.linspace(r0, r1, nr)
+#     w_r = np.full(nr, (r1 - r0) / (nr - 1))
+#     w_r[0] = w_r[-1] = w_r[0] / 2
+#     return r, w_r  #gauss instead
+
+def radial_nodes_and_weights(nr, r0=0.0, r1= 0.95):
+    nodes, weights = leggauss(nr)
+
+    r = 0.5 * (nodes + 1) * (r1 - r0) + r0  
+    w_r = 0.5 * (r1 - r0) * weights
+
+    return r, w_r
+
+
+def get_trapezoidal_nodes(n, a=0.0, b=2 * np.pi):
+    h = (b - a) / (n - 1)
+    x = np.linspace(a, b, n)
+    return x
+
 
 class grid_data:
     def __init__(self,m,bdry,l,precond=True,order='cubic',density=1,bc='dirichlet'):
         self.m = m
+        nr_quad = 4
+        ntheta_quad = 6
 #        Physical Grid
         self.x = np.cos((2*np.arange(self.m)+1)*np.pi/(2*self.m))
         self.x1, self.x2 = np.meshgrid(self.x,self.x,indexing='ij')
+
+        # Compute trapizoidal quadrature weights
+    
+        # Radial nodes and weights
+        self.r_quad, self.w_r_quad = radial_nodes_and_weights(nr_quad, r0=0.0, r1=1.0)
+
+        # Angular nodes and weights
+        self.theta_quad = get_trapezoidal_nodes(ntheta_quad, a=0.0, b=2 * np.pi)
+        self.w_theta_quad = trapezoidal_weights(ntheta_quad)
+
+
+        # Create 2D quadrature grid
+        self.R_quad, self.Theta_quad = np.meshgrid(self.r_quad, self.theta_quad, indexing='ij')
+        self.x_nodes_quad = self.R_quad * np.cos(self.Theta_quad)
+        self.y_nodes_quad = self.R_quad * np.sin(self.Theta_quad)
+
+        # Flatten quadrature nodes
+        self.eval_xi = self.x_nodes_quad.flatten()
+        self.eval_yi = self.y_nodes_quad.flatten()
+                
+        # Compute quadrature weights
+        self.w2d_quad = np.outer(self.w_r_quad, self.w_theta_quad)
+        self.weights = self.w2d_quad.flatten()
+
+        # Adjust weights for Jacobian (e.g., in polar coordinates)
+        self.weights *= self.R_quad.flatten()
+
+
+
 #        Frequency Grid
         self.fs = np.arange(self.m)*1.0
         self.fx, self.fy = np.meshgrid(self.fs,self.fs,indexing='ij')
+
 #        Define the boundary. Currently implemented for star-shaped domains.
 #        self.b, self.flag = self.createbdry(bound)
         bdry2 = [lambda x:np.arccos(bdry[0](x)), lambda x: np.arccos(bdry[1](x))];
@@ -23,6 +85,7 @@ class grid_data:
         self.flag = self.createflag(bdry)
         self.p = np.shape(self.b)[0]
         self.k = np.sum(self.flag)
+
 #        Interpolation Operator
         self.order=order
         dirichlet = []
@@ -85,6 +148,7 @@ class grid_data:
         w = np.roll(flag,-1,0) + np.roll(flag,1,0) + np.roll(flag,-1,1) + np.roll(flag,1,1)
         w[~self.flag] = 0
         return w
+    
     def contour(self,w):
         plt.figure()
         plt.subplot(111)
