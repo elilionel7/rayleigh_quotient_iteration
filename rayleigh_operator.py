@@ -1,111 +1,150 @@
-# rayleigh_operator.py
-import sys
-import os
-
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "SEEM_Chebyshev_master"))
-
-from collections import defaultdict
-import pandas as pd
 import numpy as np
-from operator_data import operator_data
-from scipy.fftpack import dct as dct
-from scipy.fftpack import idct as idct
-from scipy.fftpack import dctn as dctn
-from scipy.fftpack import idctn as idctn
-from scipy.fftpack import dst as dst
-from scipy.fftpack import idst as idst
+from scipy.fftpack import dctn, idctn
 from scipy.sparse.linalg import LinearOperator
-from scipy.integrate import simps
-from scipy.interpolate import interp2d, RectBivariateSpline
-from scipy.interpolate import griddata
-from scipy.integrate import simps
-from scipy.sparse.linalg import LinearOperator, gmres
-
-
 import scipy
 
+class RayleighOperator:
+    def __init__(self, gdata, l, precond=False):
+        self.gdata = gdata
+        self.l = l
+        self.MM = LinearOperator((gdata.k + gdata.p, gdata.k + gdata.p), matvec=self.M)
+        if precond:
+            self.PP = LinearOperator((gdata.k + gdata.p, gdata.k + gdata.p), matvec=self.precond)
 
-class RayleighOperator(operator_data):
-    def __init__(self, gdata, p, precond=False):
-        super().__init__(gdata, p, precond)
+    def ker(self, w, l=None):
+        if l is None:
+            l = self.l
+        w = np.reshape(w, (self.gdata.m, self.gdata.m))
+        w = np.real(idctn(dctn(w) * (1 + self.gdata.fx**2 + self.gdata.fy**2)**-l)) / (2 * self.gdata.m)**2
+        return w.flatten()
 
+    def lap(self, u):
+        h = 2 * 0.95 / self.gdata.m  # Grid spacing
+        u_full = np.reshape(u, (self.gdata.m, self.gdata.m))
+        ux = np.gradient(u_full, h, axis=0)
+        uxx = np.gradient(ux, h, axis=0)
+        uy = np.gradient(u_full, h, axis=1)
+        uyy = np.gradient(uy, h, axis=1)
+        return (uxx + uyy).flatten()
 
-    def a_u(self, u, l):
-        # u_full_grid = np.zeros(self.gdata.m**2)
-        # u_full_grid[self.gdata.flag.flatten()] = u  
-        u_full = u.reshape(self.gdata.x1.shape)  
+    def C(self, w):
+        w_grid = np.reshape(w, (self.gdata.m, self.gdata.m))
+        lap_w = np.reshape(self.lap(w_grid.flatten()), (self.gdata.m, self.gdata.m))
+        lap_w += np.reshape(self.lap(w_grid.T.flatten()), (self.gdata.m, self.gdata.m)).T
+        lap_w[~self.gdata.flag] = 0  # Dirichlet boundary
+        boundary_eval = self.gdata.xx @ w.flatten()
+        return np.hstack((lap_w[self.gdata.flag], boundary_eval))
+    
+    def Ct(self, w):
+        z = np.zeros((self.gdata.m, self.gdata.m))
+        z[self.gdata.flag] = w[:self.gdata.k]
+        z = self.lap(z) + self.lap(z.T).T
+        z = z.flatten()
+        z += self.gdata.xxT @ w[-self.gdata.p:]
+        return z
 
-        Au_full_grid = self.ker(u_full, l)
+    def Ct_shift(self, w, shift):
+        z = np.zeros((self.gdata.m, self.gdata.m))
+        z[self.gdata.flag] = w[:self.gdata.k]
+        lap_z = self.lap(z.flatten()).reshape(self.gdata.m, self.gdata.m)
+        lap_z_t = self.lap(z.T.flatten()).reshape(self.gdata.m, self.gdata.m).T
+        z_shifted = lap_z + lap_z_t - shift * z
+        z_flat = z_shifted.flatten()
+        z_flat += self.gdata.xxT.dot(w[-self.gdata.p:])
+        return z_flat
 
-        return Au_full_grid  
-        
+    def precond(self, w):
+        w1 = w[:self.gdata.k]
+        if self.l == 3:
+            w1 += self.gdata.FD(w1)
+        elif self.l == 4:
+            w1 += self.gdata.FD(2*w1 + self.gdata.FD(w1))
+        elif self.l == 5:
+            w1 += self.gdata.FD(3*w1 + self.gdata.FD(3*w1 + self.gdata.FD(w1)))
+        w2 = scipy.linalg.lu_solve(self.gdata.B, w[-self.gdata.p:])
+        return np.hstack((w1, w2))
 
-    #### RQI integration
+    def M(self, w):
+        return self.C(self.ker(self.Ct(w)))
 
-    def interpolate_solution(self, x, y, sols):
-        x = x.flatten()
-        y = y.flatten()
-        values = sols.flatten()
+    def make_rct_matrix_shift(self, l, shift):
+        m = np.zeros((self.gdata.k + self.gdata.p, self.gdata.k + self.gdata.p))
+        for i in range(self.gdata.k + self.gdata.p):
+            z = np.zeros(self.gdata.k + self.gdata.p)
+            z[i] = 1
+            m[:, i] = self.C(self.ker(self.Ct_shift(z, shift), l))
+        return m - shift * np.eye(self.gdata.k + self.gdata.p)
 
-        pnts = np.column_stack((x, y))
+    def a_u(self, u):
+        Au_full_grid = self.lap(u.reshape(self.gdata.x1.shape))
+        return Au_full_grid.flatten()
 
-        def interp_func(xi, yi):
-            xi = np.asarray(xi).flatten()
-            yi = np.asarray(yi).flatten()
-            # Perform interpolation
-            zi = griddata(pnts, values, (xi, yi), method="cubic")
-            return zi
+    def rayleigh_quotient(self, u, Au):
+        return np.dot(u, Au) / np.dot(u, u)
 
-        return interp_func
+    def inner_product(self, u, v):
+        return np.dot(u, v)
 
-    def integrate_function(self, f_values, weights):
-        f_values = f_values.flatten()
-        weights = weights.flatten()
-        integral = np.sum(f_values * weights)
-        return integral
+    def orthogonalize(self, u, eigenfunctions):
+        for v in eigenfunctions:
+            u -= self.inner_product(u, v) / self.inner_product(v, v) * v
+        return u / np.linalg.norm(u)
 
-    def rq_int(self, u_full, Au_full):
-        eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
-        weights = self.gdata.weights
+    def qrSolve_shift(self, rhs, shift, l):
+        print(f"Shift before qrSolve_shift: {shift:.4f}")  # Debug shift
+        rct_shifted = self.make_rct_matrix_shift(l, shift)
+        Q, R = np.linalg.qr(rct_shifted)
+        u_small = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
+        u_small = Q @ u_small
+        u_full_grid = np.zeros((self.gdata.m, self.gdata.m))
+        u_full_grid[self.gdata.flag] = u_small[:self.gdata.k]
+        u = self.ker(u_full_grid, l).flatten()
+        Au = self.a_u(u)
+        residual = np.linalg.norm(Au - shift * u)
+        print(f"Shift={shift:.4f}, Residual={residual:.2e}")
+        return u
 
-        u_interp_func = self.interpolate_solution(self.gdata.x1, self.gdata.x2, u_full)
-        u_eval = u_interp_func(eval_xi, eval_yi)
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+        if eigenfunctions is None:
+            eigenfunctions = []
 
-        Au_interp_func = self.interpolate_solution(
-            self.gdata.x1, self.gdata.x2, Au_full
-        )
-        Au_eval = Au_interp_func(eval_xi, eval_yi)
+        if u0 is None:
+            u0 = np.random.rand(self.gdata.m**2)
+            u0 /= np.linalg.norm(u0)
 
-        # Compute numerator and denominator
-        numerator = np.sum(weights * u_eval * Au_eval)
-        denominator = np.sum(weights * u_eval * u_eval)
+        u = u0.copy()
+        Au = self.a_u(u)
+        shift = self.rayleigh_quotient(u, Au)
 
-        return numerator / denominator
+        for iteration in range(1, max_iter + 1):
+            rhs_interior = u[:self.gdata.k]
+            rhs_boundary = np.zeros(self.gdata.p)
+            rhs = np.hstack((rhs_interior, rhs_boundary))
 
-    def rq_int_iter(self, l, tol=1e-8, max_iter=100):
-        rhs1 = np.ones(self.gdata.k)
-        print(f'rhs1 shape : {rhs1.shape}')  
-        shift = 0.0
+            u_new = self.qrSolve_shift(rhs, shift, l)
+            norm_u_new = np.linalg.norm(u_new)
 
-        for iter in range(max_iter):
-            u, cond = self.qrSolve_shift(rhs1, l, shift)
-            u /= np.linalg.norm(u)
-           
-            print(f'u shape : {u.shape}')
+            if norm_u_new < 1e-14:
+                raise ValueError("Solution vector became numerically zero.")
 
-            Au_full_grid = self.a_u(u, l)
+            u_new /= norm_u_new
 
-            lambdaU_new = self.rq_int(u, Au_full_grid)
+            if eigenfunctions:
+                u_new = self.orthogonalize(u_new, eigenfunctions)
 
-            if np.abs(lambdaU_new - shift) < tol:
-                print(f"Converged after {iter+1} iterations.")
-                return u, lambdaU_new, iter + 1
+            Au_new = self.a_u(u_new)
+            shift_new = self.rayleigh_quotient(u_new, Au_new)
+            residual1 = np.linalg.norm(Au_new - shift_new * u_new)  # Eigenvalue equation error
+            residual2 = np.linalg.norm(u_new - u)  # Change in u
+            print(f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={residual1:.2e}, Residual2={residual2:.2e}")
 
-            shift = lambdaU_new
-            print(f'shift : {shift}')
-           
-            rhs1 = u[:self.gdata.k].copy()
-           
-        print("Maximum iterations reached without convergence.")
-        return u, lambdaU_new, max_iter
+            # Adjusted convergence criteria
+            if residual1 < 1e-2 and residual2 < 1e-6:
+                print(f"Converged after {iteration} iterations.")
+                return u_new, shift_new, iteration
+
+            u = u_new
+            shift = shift_new
+
+        print("Max iterations reached without convergence.")
+        return u, shift, iteration

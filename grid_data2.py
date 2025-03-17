@@ -16,11 +16,6 @@ def trapezoidal_weights(n, a=0.0, b=2 * np.pi):
     return w
 
 
-# def radial_nodes_and_weights(nr, r0=0.0, r1=1.0):
-#     r = np.linspace(r0, r1, nr)
-#     w_r = np.full(nr, (r1 - r0) / (nr - 1))
-#     w_r[0] = w_r[-1] = w_r[0] / 2
-#     return r, w_r  #gauss instead
 
 def radial_nodes_and_weights(nr, r0=0.0, r1= 0.95):
     nodes, weights = leggauss(nr)
@@ -41,7 +36,7 @@ class grid_data:
     def __init__(self,m,bdry,l,precond=True,order='cubic',density=1,bc='dirichlet'):
         self.m = m
         nr_quad = 4
-        ntheta_quad = 6
+        ntheta_quad = 50
 #        Physical Grid
         self.x = np.cos((2*np.arange(self.m)+1)*np.pi/(2*self.m))
         self.x1, self.x2 = np.meshgrid(self.x,self.x,indexing='ij')
@@ -49,7 +44,8 @@ class grid_data:
         # Compute trapizoidal quadrature weights
     
         # Radial nodes and weights
-        self.r_quad, self.w_r_quad = radial_nodes_and_weights(nr_quad, r0=0.0, r1=1.0)
+        self.r_quad, self.w_r_quad = radial_nodes_and_weights(nr_quad, r0=0.0, r1=0.95)
+       
 
         # Angular nodes and weights
         self.theta_quad = get_trapezoidal_nodes(ntheta_quad, a=0.0, b=2 * np.pi)
@@ -155,11 +151,20 @@ class grid_data:
         plt.contourf(self.x1,self.x2,w,50)
         plt.colorbar()
         return 
-    def createflag(self,f):
+    def createflag_main(self,f):
 #        Calculate the interior.
         r = self.x1**2 + self.x2**2
         theta = np.arctan2(self.x2,self.x1)
         flag = r <= f[0](theta)**2 + f[1](theta)**2
+        return flag
+    
+    # In grid_data.createflag:
+    def createflag(self, f):
+        # Parametric boundary functions f = [lambda θ: 0.95*cosθ, lambda θ: 0.95*sinθ]
+        r_sq = (self.x1**2 + self.x2**2)
+        theta = np.arctan2(self.x2, self.x1)
+        boundary_r_sq = f[0](theta)**2 + f[1](theta)**2  # Should be (0.95)^2 for all θ
+        flag = r_sq <= boundary_r_sq
         return flag
     def FD(self,w1):
     #    Applies finite difference to the interior.
