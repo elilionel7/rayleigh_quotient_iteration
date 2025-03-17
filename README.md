@@ -1,43 +1,27 @@
-<!-- README.md -->
-# README
+# Rayleigh Quotient Iteration Project
 
-## PDE
- solving the Laplace equation \(-\Delta u = 1\) with boundary conditions \(u = 0\) 
+This project implements Rayleigh Quotient Iteration to compute eigenfunctions and eigenvalues for the Laplace operator on a circular domain with Dirichlet boundary conditions, using a spectral grid.
 
+## Key Files
 
-## Scripts
+- **`exmp1.py`**: Main script to run the iteration. Sets up the grid, computes eigenfunctions, and prints results (eigenvalues, L2 errors, orthogonality).
+- **`rayleigh_operator.py`**: Defines the `RayleighOperator` class, handling the operator construction, QR solve, and iteration logic.
+- **`grid_data2.py`**: Generates the spectral grid and preconditioner data.
+- **`plot_eigfunc.py`**: Provides plotting functionality for eigenfunctions.
 
-### 1. `exmp1_v1.py`
+## Prerequisites
 
-- **Description**: 
-  - This script solves the Laplace equation \(-\Delta u = 1\) with boundary condition \(u = 0\) using the `qr_solve2` method from the original code.
+- Python 3.x
+- Required libraries: `numpy`, `scipy`
 
+Install dependencies:
 
-### 2. `exmp1_v2.py`
+```bash
+pip install -r requirements.txt
+```
 
-- **Description**: 
-  - This script also solves the Laplace equation \(-\Delta u = 1\) with boundary condition \(u = 0\), but it uses the Rayleigh Quotient Iteration method with qr_solve2 to approx the solution of the pde. 
+Run file
 
-### 3. `exmp1_v3.py`
-
-- **Description**: 
-  - variable shift on the intetior
-### 4. `rayleigh_operator.py`
-
-
-### 4. `exmp1_v4.py`
-
-
-- **Description**: 
-  - performs rqi
-
-- **Description**: 
-  - This script defines the `RayleighOperator` class, inherits the `operator_data` class from the original code. It has the `iter_solver` method, which is used to solve PDEs by iteratively solving the pde through Rayleigh Quotient Iteration by calling the qr_solve2 to update u.
-
-
-1. **Run `exmp1_v1.py`**: 
-   - Command: `python exmp1_v1.py`
-
-2. **Run `exmp1_v2.py`**:
-   - Command: `python exmp1_v2.py`
-
+```run
+python exmp.py
+```
