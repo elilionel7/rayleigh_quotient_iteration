@@ -57,6 +57,7 @@ def main():
                     l,
                     u0=u0,  # Pass flattened initial guess
                     eigenfunctions=eigfuncs,
+                    mode=eigen_idx + 1
                 )
 
                 sol = exact_eigenfunc(gdata.x1, gdata.x2, j0_k)  # 2D array

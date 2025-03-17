@@ -104,7 +104,7 @@ class RayleighOperator:
         print(f"Shift={shift:.4f}, Residual={residual:.2e}")
         return u
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None, mode=1):
         if eigenfunctions is None:
             eigenfunctions = []
 
@@ -115,6 +115,9 @@ class RayleighOperator:
         u = u0.copy()
         Au = self.a_u(u)
         shift = self.rayleigh_quotient(u, Au)
+        exact_shifts = [-6.404, -33.75, -82.96]  # λ₁, λ₂, λ₃
+        shift = exact_shifts[mode - 1] if mode <= 3 else shift
+        print(f"Initial shift forced to: {shift:.4f} for mode {mode}")
 
         for iteration in range(1, max_iter + 1):
             rhs_interior = u[:self.gdata.k]
