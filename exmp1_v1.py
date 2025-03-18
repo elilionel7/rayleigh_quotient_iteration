@@ -1,33 +1,31 @@
-# exmp1.py
-import sys
-import os
 import numpy as np
 from scipy.special import jv, jn_zeros
-from rayleigh_operator import RayleighOperator
+from rq_operator import RayleighOperatorv1
 from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
 
-j0 = jn_zeros(0, 1)[0]  
-
-def exact_eigenfunc(x, y, mode=1):
+def exact_eigenfunc(x, y, mode):
     r = np.sqrt(x**2 + y**2)
+    R = 0.95
     theta = np.arctan2(y, x)
     if mode == 1:
         j0_k = jn_zeros(0, 1)[0]
-        return jv(0, j0_k * r / 0.95)
+        return jv(0, j0_k * r / R)
     elif mode == 2:
         j1_k = jn_zeros(1, 1)[0]
-        return jv(1, j1_k * r / 0.95) * np.cos(theta)
+        return jv(1, j1_k * r / R) * np.cos(theta)
     elif mode == 3:
         j1_k = jn_zeros(1, 1)[0]
-        return jv(1, j1_k * r / 0.95) * np.sin(theta)
+        return jv(1, j1_k * r / R) * np.sin(theta)
+    else:
+        raise ValueError("Mode not implemented")
 
 def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
 
     results = dict()
-    results["p"] = [1]  # Polynomial degrees
-    results["pts"] = [30, 40, 50]  # Grid resolutions
+    results["p"] = [1]
+    results["pts"] = [20, 24, 30]
     num_eigfuncs = 3
     
     results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs))
@@ -40,7 +38,6 @@ def main():
     for l_idx, l in enumerate(results["p"]):
         for k_idx, pts in enumerate(results["pts"]):
             print(f"\nRunning for p={l} and pts={pts}...")
-
             gdata = grid_data(
                 pts,
                 [lambda x: 0.95 * np.cos(x), lambda y: 0.95 * np.sin(y)],
@@ -48,23 +45,26 @@ def main():
                 precond=True,
                 order="spectral",
             )
-            odata = RayleighOperator(gdata, l, precond=True)  
+            odata = RayleighOperatorv1(gdata, l, precond=True)
 
             eigfuncs = []
-            eigvals = []
-
             for eigen_idx in range(num_eigfuncs):
-                mode = eigen_idx + 1
-                u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
+                print(f"\nComputing eigenfunction {eigen_idx + 1}...")
+                u0 = exact_eigenfunc(gdata.x1, gdata.x2, eigen_idx + 1)#1-f(x,y)
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
-                u, lambdaU, iterations = odata.rq_int_iter_eig(l, u0=u0, eigenfunctions=eigfuncs)
-                sol = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
-                sol_norm = np.linalg.norm(sol[gdata.flag])
-
-                u_interior = u[:gdata.k]  # Already 1D
-                sol_interior = sol[gdata.flag]  # 2D mask flattens to 1D
                 
+                u, lambdaU, iterations = odata.rq_int_iter_eig(
+                    l,
+                    u0=u0,
+                    eigenfunctions=eigfuncs,
+                    mode=eigen_idx + 1
+                )
+
+                sol = exact_eigenfunc(gdata.x1, gdata.x2, eigen_idx + 1)
+                sol_norm = np.linalg.norm(sol[gdata.flag])
+                u_interior = u[:gdata.k]
+                sol_interior = sol[gdata.flag]
                 sign = np.sign(np.dot(u_interior, sol_interior))
                 rel_error = np.linalg.norm(sign * u_interior - sol_interior) / sol_norm
                 
@@ -81,23 +81,9 @@ def main():
                     iprod = odata.inner_product(eigfuncs[i], eigfuncs[j])
                     results["orthogonality"][l_idx, k_idx, i, j] = iprod
                     if i != j:
-                        print(f"Orthogonality <ψ{i},ψ{j}>: {iprod:.2e}")
+                        print(f"Orthogonality <ψ{i+1},ψ{j+1}>: {iprod:.2e}")
 
     print("\n########-Done-########\n")
-        
+
 if __name__ == "__main__":
     main()
-   # Generate convergence plots
-       # After main(), add:
-    # from print_results import make_graph, make_chart
-    # from make_graph_rq import make_graph_qr
-    # from make_chart_rq import make_chart_qr
-
-    # # Generate convergence plots
-    # make_graph(results, "eigenvalues", title="Eigenvalue Convergence")
-    # make_chart(results, "L2", title="L2 Error vs Grid Resolution")
-    #plot_eigenfunction(u, gdata)
-        
-
-
- 
