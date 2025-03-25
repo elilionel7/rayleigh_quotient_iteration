@@ -456,3 +456,59 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None, mode=1):
+        
+        if eigenfunctions is None:
+            eigenfunctions = []
+
+        if u0 is None:
+            u0 = np.random.rand(self.gdata.m**2)
+            u0 /= np.linalg.norm(u0)
+
+        u = u0.copy()
+        Au = self.a_u(u)
+        shift = self.rayleigh_quotient(u, Au)  
+    
+        rhs_i = u[:self.gdata.k]
+        rhs_b = np.zeros(self.gdata.p)
+        rhs = np.hstack((rhs_i, rhs_b))
+        print(rhs.shape)
+        
+        # Iteration loop
+        for iteration in range(1, max_iter + 1):
+            
+            u_new = self.qrSolve_shift(rhs, shift, l)
+            norm_u_new = np.linalg.norm(u_new)
+            if norm_u_new < 1e-14:
+                raise ValueError("Solution vector is numerically zero.")
+            u_new /= norm_u_new  
+
+            if eigenfunctions:
+                u_new = self.orthogonalize(u_new, eigenfunctions)
+
+            Au_new = self.a_u(u_new)
+            
+            shift_new = self.rq_int(u_new, Au_new)  
+
+            residual1 = np.linalg.norm(Au_new - shift_new * u_new)  #
+            residual2 = np.linalg.norm(u_new - u)  
+
+            print(f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={residual1:.2e}, Residual2={residual2:.2e}")
+
+            if residual1 < 1e-2 and residual2 < tol:
+                print(f"Converged after {iteration} iterations.")
+                return u_new, shift_new, iteration
+
+            u = u_new
+            shift = shift_new  
+
+        print("Max iterations reached without convergence.")
+        return u, shift, iteration

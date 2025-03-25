@@ -52,21 +52,15 @@ class RayleighOperator:
         w2 = idct(w2,axis=0)
         z = w1 + w2
         return z
-    # def C(self, w):
-    #     w_grid = np.reshape(w, (self.gdata.m, self.gdata.m))
-    #     lap_w = np.reshape(self.lap(w_grid.flatten()), (self.gdata.m, self.gdata.m))
-    #     lap_w += np.reshape(self.lap(w_grid.T.flatten()), (self.gdata.m, self.gdata.m)).T
-    #     lap_w[~self.gdata.flag] = 0  # Dirichlet boundary
-    #     boundary_eval = self.gdata.xx @ w.flatten()
-    #     return np.hstack((lap_w[self.gdata.flag], boundary_eval))
+    
     
     def C(self,w):
-    #    Evaluate at b.
+  
         b = self.gdata.xx.dot(w)
-    #    Take Chebyshev derivative
+   
         w = np.reshape(w,(self.gdata.m,self.gdata.m))
         z = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
-        z[~self.gdata.flag] = 0
+        # z[~self.gdata.flag] = 0
         z = z[self.gdata.flag]
         return np.hstack((z,b))
     
@@ -141,7 +135,7 @@ class RayleighOperator:
         u_interp_func = self.interpolate_solution(self.gdata.x1, self.gdata.x2, u * v)
         uv_eval = u_interp_func(eval_xi, eval_yi)
         return np.sum(weights * uv_eval)
-
+       
     def orthogonalize(self, u, eigenfunctions):
         u_orth = u.copy()
         for v in eigenfunctions:
@@ -174,51 +168,50 @@ class RayleighOperator:
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None, mode=1):
-        
+    
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
         if eigenfunctions is None:
             eigenfunctions = []
-
         if u0 is None:
-            u0 = np.random.rand(self.gdata.m**2)
+            x, y = self.gdata.x1.flatten(), self.gdata.x2.flatten()
+            r = np.sqrt(x**2 + y**2)
+            u0 = 1 - r / 0.95
             u0 /= np.linalg.norm(u0)
+            u0_grid = u0.reshape(self.gdata.m, self.gdata.m)
+            u0_grid[~self.gdata.flag] = 0 
+            u0 = u0_grid.flatten()
+
+            
 
         u = u0.copy()
         Au = self.a_u(u)
-        shift = self.rayleigh_quotient(u, Au)  
-    
-        rhs_i = u[:self.gdata.k]
+        shift = self.rayleigh_quotient(u, Au)
+
+        rhs_i = np.ones(self.gdata.k)
         rhs_b = np.zeros(self.gdata.p)
         rhs = np.hstack((rhs_i, rhs_b))
-        print(rhs.shape)
-        
-        # Iteration loop
+
         for iteration in range(1, max_iter + 1):
-            
             u_new = self.qrSolve_shift(rhs, shift, l)
-            norm_u_new = np.linalg.norm(u_new)
-            if norm_u_new < 1e-14:
-                raise ValueError("Solution vector is numerically zero.")
-            u_new /= norm_u_new  
+            u_new /= np.linalg.norm(u_new)
 
             if eigenfunctions:
                 u_new = self.orthogonalize(u_new, eigenfunctions)
 
             Au_new = self.a_u(u_new)
-            
-            shift_new = self.rq_int(u_new, Au_new)  
+            shift_new = self.rayleigh_quotient(u_new, Au_new)
 
-            residual1 = np.linalg.norm(Au_new - shift_new * u_new)  #
-            residual2 = np.linalg.norm(u_new - u)  
+            res1 = np.linalg.norm(Au_new - shift_new*u_new)
+            res2 = np.linalg.norm(u_new - u)
 
-            print(f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={residual1:.2e}, Residual2={residual2:.2e}")
+            print(f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={res1:.2e}, Residual2={res2:.2e}")
 
-            if residual1 < 1e-2 and residual2 < tol:
+            if res1 < 1e-6 or res2 < tol:
                 print(f"Converged after {iteration} iterations.")
                 return u_new, shift_new, iteration
 
             u = u_new
-            shift = shift_new  
+            shift = shift_new
 
-        print("Max iterations reached without convergence.")
+        print("Maximum iterations reached.")
         return u, shift, iteration

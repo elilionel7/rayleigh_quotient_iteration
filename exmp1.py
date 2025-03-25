@@ -54,16 +54,16 @@ def main():
             eigvals = []
 
             for eigen_idx in range(num_eigfuncs):
-                mode = eigen_idx + 1
+                mode =  1
                 u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
-                u, lambdaU, iterations = odata.rq_int_iter_eig(l, u0=u0, eigenfunctions=eigfuncs)
+                u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
                 sol = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 sol_norm = np.linalg.norm(sol[gdata.flag])
 
-                u_interior = u[:gdata.k]  # Already 1D
-                sol_interior = sol[gdata.flag]  # 2D mask flattens to 1D
+                u_interior = u[:gdata.k]  
+                sol_interior = sol[gdata.flag]  
                 
                 sign = np.sign(np.dot(u_interior, sol_interior))
                 rel_error = np.linalg.norm(sign * u_interior - sol_interior) / sol_norm
