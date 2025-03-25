@@ -201,12 +201,13 @@ class RayleighOperator:
             Au_new = self.a_u(u_new)
             shift_new = self.rayleigh_quotient(u_new, Au_new)
 
-            res1 = np.linalg.norm(Au_new - shift_new*u_new)
-            res2 = np.linalg.norm(u_new - u)
-
+            # res1 = np.linalg.norm(Au_new - shift_new*u_new)
+            res1 = np.linalg.norm(u_new - u)
+            res2 = np.linalg.norm(u_new + u)
+            
             print(f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={res1:.2e}, Residual2={res2:.2e}")
 
-            if res1 < 1e-6 or res2 < tol:
+            if res1 < tol or res2 < tol:
                 print(f"Converged after {iteration} iterations.")
                 return u_new, shift_new, iteration
 
