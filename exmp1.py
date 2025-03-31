@@ -7,6 +7,12 @@ from rayleigh_operator import RayleighOperator
 from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
 
+
+
+
+nr_quad = 20
+ntheta_quad = 60
+
 j0 = jn_zeros(0, 1)[0]  
 
 def exact_eigenfunc(x, y, mode=1):
@@ -47,6 +53,7 @@ def main():
                 l,
                 precond=True,
                 order="spectral",
+                nr_quad=nr_quad, ntheta_quad=ntheta_quad
             )
             odata = RayleighOperator(gdata, l, precond=True)  
 

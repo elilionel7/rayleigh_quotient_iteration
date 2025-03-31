@@ -33,10 +33,10 @@ def get_trapezoidal_nodes(n, a=0.0, b=2 * np.pi):
 
 
 class grid_data:
-    def __init__(self,m,bdry,l,precond=True,order='cubic',density=1,bc='dirichlet'):
+    def __init__(self,m,bdry,l,precond=True,order='cubic',density=1,bc='dirichlet',nr_quad=18, ntheta_quad=50):
         self.m = m
-        nr_quad = 4
-        ntheta_quad = 50
+        self.nr_quad = nr_quad
+        self.ntheta_quad = ntheta_quad
 #        Physical Grid
         self.x = np.cos((2*np.arange(self.m)+1)*np.pi/(2*self.m))
         self.x1, self.x2 = np.meshgrid(self.x,self.x,indexing='ij')
@@ -44,12 +44,12 @@ class grid_data:
         # Compute trapizoidal quadrature weights
     
         # Radial nodes and weights
-        self.r_quad, self.w_r_quad = radial_nodes_and_weights(nr_quad, r0=0.0, r1=0.95)
+        self.r_quad, self.w_r_quad = radial_nodes_and_weights(self.nr_quad, r0=0.0, r1=0.95)
        
 
         # Angular nodes and weights
-        self.theta_quad = get_trapezoidal_nodes(ntheta_quad, a=0.0, b=2 * np.pi)
-        self.w_theta_quad = trapezoidal_weights(ntheta_quad)
+        self.theta_quad = get_trapezoidal_nodes(self.ntheta_quad, a=0.0, b=2 * np.pi)
+        self.w_theta_quad = trapezoidal_weights(self.ntheta_quad)
 
 
         # Create 2D quadrature grid
