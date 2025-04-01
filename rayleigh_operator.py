@@ -47,7 +47,7 @@ class RayleighOperator:
         w = w2
         w = w1 + w2
         return w
-
+    
     def lapt(self, w):
         w1 = np.copy(w)
         w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
@@ -112,7 +112,9 @@ class RayleighOperator:
         return m
 
     def a_u(self, u):
-        Au_full_grid = self.lap(u.reshape(self.gdata.x1.shape))
+        w = np.reshape(u, (self.gdata.m, self.gdata.m))
+        Au_full_grid = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
+        
         return Au_full_grid.flatten()
 
     def interpolate_solution(self, x, y, sols):
@@ -194,7 +196,7 @@ class RayleighOperator:
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=50, eigenfunctions=None):
         if eigenfunctions is None:
             eigenfunctions = []
         if u0 is None:
