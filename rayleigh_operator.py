@@ -170,6 +170,25 @@ class RayleighOperator:
             proj = self.inner_product(u_orth, v) / self.inner_product(v, v)
             u_orth -= proj * v
         return u_orth / np.linalg.norm(u_orth)
+    
+    def verify_eigenfunction(self, u, eigenvalue):
+        Au = self.a_u(u).reshape(self.gdata.m, self.gdata.m)
+        Au[~self.gdata.flag] = 0
+        Au = Au.flatten()
+
+        u_hat = Au / eigenvalue
+        relative_error = np.linalg.norm(u_hat - u) / np.linalg.norm(u)
+
+        return relative_error, u_hat
+    
+    def verify_eigenfunction1(self, u, lambdaU):
+        Au = self.a_u(u).reshape(self.gdata.m, self.gdata.m)
+        Au[~self.gdata.flag] = 0
+        Au = Au.flatten()
+
+        residual = np.linalg.norm(Au - lambdaU*u) / np.linalg.norm(u)
+        return residual, Au
+
 
     def qrSolve_shift(self, rhs, shift, l):
         rct_shifted = self.make_rct_matrix_shift(l, shift)
@@ -240,3 +259,4 @@ class RayleighOperator:
             shift = shift_new
         print("Maximum iterations reached.")
         return u, shift, iteration
+
