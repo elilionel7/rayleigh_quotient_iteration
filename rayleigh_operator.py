@@ -227,9 +227,6 @@ class RayleighOperator:
         u = u0.copy()
 
         au = self.a_u(u)
-        au_grid = au.reshape(self.gdata.m, self.gdata.m)
-        au_grid[~self.gdata.flag] = 0
-        au_grid = au_grid.flatten()
         shift = self.rq_int(u, au)
         rhs_i = np.ones(self.gdata.k)
         rhs_b = np.zeros(self.gdata.p)
