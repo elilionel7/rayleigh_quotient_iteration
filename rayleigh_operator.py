@@ -215,9 +215,10 @@ class RayleighOperator:
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=50, eigenfunctions=None):
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
         if eigenfunctions is None:
             eigenfunctions = []
+
         if u0 is None:
             x, y = self.gdata.x1.flatten(), self.gdata.x2.flatten()
             r = np.sqrt(x**2 + y**2)
@@ -228,13 +229,18 @@ class RayleighOperator:
 
         au = self.a_u(u)
         shift = self.rq_int(u, au)
-        rhs_i = np.ones(self.gdata.k)
+
         rhs_b = np.zeros(self.gdata.p)
+
+        # Initial rhs
+        #u_grid = u.reshape(self.gdata.m, self.gdata.m)
+        # rhs_i = u_grid[self.gdata.flag]
+        rhs_i = np.ones(self.gdata.k)
         rhs = np.hstack((rhs_i, rhs_b))
 
         for iteration in range(1, max_iter + 1):
             u_new = self.qrSolve_shift(rhs, shift, l)
-            u_new /= np.linalg.norm(u_new)  # entire grid
+            u_new /= np.linalg.norm(u_new)
 
             if eigenfunctions:
                 u_new = self.orthogonalize(u_new, eigenfunctions)
@@ -248,12 +254,17 @@ class RayleighOperator:
             print(
                 f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={res1:.2e}, Residual2={res2:.2e}"
             )
+
             if res1 < tol or res2 < tol:
                 print(f"Converged after {iteration} iterations.")
                 return u_new, shift_new, iteration
 
             u = u_new
             shift = shift_new
+
+            u_grid = u.reshape(self.gdata.m, self.gdata.m)
+            rhs_i = u_grid[self.gdata.flag]
+            rhs = np.hstack((rhs_i, rhs_b))
+
         print("Maximum iterations reached.")
         return u, shift, iteration
-
