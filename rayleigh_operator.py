@@ -83,7 +83,6 @@ class RayleighOperator:
         z = self.lapt(z) + self.lapt(z.T).T
         z = z.flatten()
         z += self.gdata.xxT.dot(w[-self.gdata.p :])
-        #
         return z
 
     def precond(self, w):
@@ -111,7 +110,8 @@ class RayleighOperator:
             m[:, i] = self.ker(self.Ct_shift(z, shift), l).flatten()
         return m
 
-    def a_u(self, u):
+    def a_u(self, u,l):
+        u = self.ker(u,l)
         w = np.reshape(u, (self.gdata.m, self.gdata.m))
         Au_full_grid = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
         
@@ -171,8 +171,8 @@ class RayleighOperator:
             u_orth -= proj * v
         return u_orth / np.linalg.norm(u_orth)
     
-    def verify_eigenfunction(self, u, eigenvalue):
-        Au = self.a_u(u).reshape(self.gdata.m, self.gdata.m)
+    def verify_eigenfunction(self, u, l, eigenvalue):
+        Au = self.a_u(u,l).reshape(self.gdata.m, self.gdata.m)
         Au[~self.gdata.flag] = 0
         Au = Au.flatten()
 
@@ -181,24 +181,28 @@ class RayleighOperator:
 
         return relative_error, u_hat
     
-    def verify_eigenfunction1(self, u, lambdaU):
-        Au = self.a_u(u).reshape(self.gdata.m, self.gdata.m)
+    def verify_eigenfunction1(self, u, l, lambdaU):
+        Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
         Au[~self.gdata.flag] = 0
         Au = Au.flatten()
 
         residual = np.linalg.norm(Au - lambdaU*u) / np.linalg.norm(u)
         return residual, Au
 
-
     def qrSolve_shift(self, rhs, shift, l):
-        rct_shifted = self.make_rct_matrix_shift(l, shift)
-        Q, R = np.linalg.qr(rct_shifted)
-        u_small = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
-        u_small = Q @ u_small
-        u_full_grid = np.zeros((self.gdata.m, self.gdata.m))
+        rct_shifted = self.make_rct_matrix_shift(l, shift).astype(np.complex128)
+        rhs = rhs.astype(np.complex128)
+
+        Q, R = np.linalg.qr(rct_shifted)  
+
+        y = scipy.linalg.solve_triangular(R.conj().T, rhs, lower=True)
+
+        u_small = Q @ y
+        u_full_grid = np.zeros((self.gdata.m, self.gdata.m), dtype=np.complex128)
         u_full_grid[self.gdata.flag] = u_small[: self.gdata.k]
-        u = self.ker(u_full_grid, l).flatten()
-        Au = self.a_u(u)
+
+        u = self.ker(u_full_grid, l).flatten().astype(np.complex128)
+        Au = self.a_u(u, l)
         residual = np.linalg.norm(Au - shift * u)
         print(f"Shift={shift:.4f}, Residual={residual:.2e}")
         return u
@@ -207,9 +211,10 @@ class RayleighOperator:
         eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
         weights = self.gdata.weights
         Au = Au.flatten()
-        Au_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * Au)
+        Au_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, np.conj(u) * Au)
+
         Au_eval = Au_interp_func(eval_xi, eval_yi)
-        u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * u)
+        u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, np.conj(u) * u)
         uu_eval = u_interp_func(eval_xi, eval_yi)
         numerator = np.sum(weights * Au_eval)
         denominator = np.sum(weights * uu_eval)
@@ -225,27 +230,24 @@ class RayleighOperator:
             u0 = 1 - r / 0.95
             u0 /= np.linalg.norm(u0)
 
-        u = u0.copy()
+        u = u0.astype(np.complex128)
 
-        au = self.a_u(u)
+        au = self.a_u(u, l)
         shift = self.rq_int(u, au)
 
-        rhs_b = np.zeros(self.gdata.p)
-
-        # Initial rhs
-        #u_grid = u.reshape(self.gdata.m, self.gdata.m)
-        # rhs_i = u_grid[self.gdata.flag]
-        rhs_i = np.ones(self.gdata.k)
+        rhs_b = np.zeros(self.gdata.p, dtype=np.complex128)
+        rhs_i = np.ones(self.gdata.k, dtype=np.complex128)
         rhs = np.hstack((rhs_i, rhs_b))
 
         for iteration in range(1, max_iter + 1):
             u_new = self.qrSolve_shift(rhs, shift, l)
+            u_new = u_new.astype(np.complex128)
             u_new /= np.linalg.norm(u_new)
 
             if eigenfunctions:
                 u_new = self.orthogonalize(u_new, eigenfunctions)
 
-            au_new = self.a_u(u_new)
+            au_new = self.a_u(u_new, l)
             shift_new = self.rq_int(u_new, au_new)
 
             res1 = np.linalg.norm(u_new - u)
