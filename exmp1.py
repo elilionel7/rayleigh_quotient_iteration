@@ -66,7 +66,7 @@ def main():
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
                 u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
-                relative_error_verification, u_hat = odata.verify_eigenfunction(u, lambdaU)
+                relative_error_verification, u_hat = odata.verify_eigenfunction(u, l, lambdaU)
                 print(f"Eigenfunction verification relative error: {relative_error_verification:.2e}")
 
 
