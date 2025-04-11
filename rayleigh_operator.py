@@ -234,6 +234,7 @@ class RayleighOperator:
 
         au = self.a_u(u, l)
         shift = self.rq_int(u, au)
+        shift = shift + 1j * 0.7
 
         rhs_b = np.zeros(self.gdata.p, dtype=np.complex128)
         rhs_i = np.ones(self.gdata.k, dtype=np.complex128)
