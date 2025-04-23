@@ -8,8 +8,6 @@ from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
 
 
-
-
 nr_quad = 20
 ntheta_quad = 60
 
@@ -37,10 +35,10 @@ def main():
     num_eigfuncs = 3
     
     results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs))
-    results["eigenvalues"] = np.zeros_like(results["L2"])
+    results["eigenvalues"] = np.zeros_like(results["L2"], dtype=complex)
     results["iterations"] = np.zeros_like(results["L2"], dtype=int)
     results["orthogonality"] = np.zeros(
-        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs)
+        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs), dtype=complex
     )
 
     for l_idx, l in enumerate(results["p"]):
@@ -61,7 +59,7 @@ def main():
             eigvals = []
 
             for eigen_idx in range(num_eigfuncs):
-                mode =  1
+                mode = eigen_idx + 1
                 u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
@@ -98,17 +96,7 @@ def main():
         
 if __name__ == "__main__":
     main()
-   # Generate convergence plots
-       # After main(), add:
-    # from print_results import make_graph, make_chart
-    # from make_graph_rq import make_graph_qr
-    # from make_chart_rq import make_chart_qr
-
-    # # Generate convergence plots
-    # make_graph(results, "eigenvalues", title="Eigenvalue Convergence")
-    # make_chart(results, "L2", title="L2 Error vs Grid Resolution")
-    #plot_eigenfunction(u, gdata)
-        
+   
 
 
  
