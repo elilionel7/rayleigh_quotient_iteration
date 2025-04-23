@@ -1,5 +1,4 @@
 # rayleigh_operator.py
-
 import numpy as np
 from scipy.fftpack import dct as dct
 from scipy.fftpack import idct as idct
@@ -10,8 +9,8 @@ from scipy.fftpack import idst as idst
 from scipy.sparse.linalg import LinearOperator
 from scipy.interpolate import griddata
 from scipy.interpolate import RegularGridInterpolator
-
 import scipy
+
 
 class RayleighOperator:
     def __init__(self, gdata, l, precond=True):
@@ -44,10 +43,9 @@ class RayleighOperator:
         w2 = np.copy(w)
         w2 = idct(dct(w2, axis=0) * -self.gdata.fx**2, axis=0) / (2 * self.gdata.m)
         w2 = w2 * -1 / (1 - self.gdata.x1**2)
-        w = w2
         w = w1 + w2
         return w
-    
+
     def lapt(self, w):
         w1 = np.copy(w)
         w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
@@ -110,20 +108,39 @@ class RayleighOperator:
             m[:, i] = self.ker(self.Ct_shift(z, shift), l).flatten()
         return m
 
-    def a_u(self, u,l):
-        u = self.ker(u,l)
+    def a_u(self, u, l):
+        u = self.ker(u, l)
         w = np.reshape(u, (self.gdata.m, self.gdata.m))
         Au_full_grid = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
-        
         return Au_full_grid.flatten()
+
+    def initial_guess_sin(self, mode):
+        x, y = self.gdata.x1, self.gdata.x2
+        r = np.sqrt(x**2 + y**2)
+        theta = np.arctan2(y, x)
+        if mode == 1:
+            guess = np.sin(np.pi * r / 0.95)
+        elif mode == 2:
+            guess = np.sin(2 * np.pi * r / 0.95) * np.cos(theta)
+        elif mode == 3:
+            guess = np.sin(3 * np.pi * r / 0.95) * np.sin(theta)
+        else:
+            guess = np.random.rand(*r.shape)
+
+        noise = np.random.normal(0, 0.05, size=guess.shape)
+        return (guess + noise).flatten()
+
+    def get_initial_guess(self, eigenfunctions):
+        mode = len(eigenfunctions) + 1
+        guess = self.initial_guess_sin(mode)
+
+        return guess / np.linalg.norm(guess)
 
     def interpolate_solution(self, x, y, sols):
         x = x.flatten()
         y = y.flatten()
         values = sols.flatten()
         pnts = np.column_stack((x, y))
-        
-
 
         def interp_func(xi, yi):
             xi = np.asarray(xi).flatten()
@@ -132,18 +149,13 @@ class RayleighOperator:
             return zi
 
         return interp_func
-    
 
     def interpolate_solution1(self, x, y, sols):
-    
         x = np.unique(x)
         y = np.unique(y)
-
-        
         sols_grid = sols.reshape(len(x), len(y))
-
         interp_func = RegularGridInterpolator(
-            (x, y), sols_grid, method='linear', bounds_error=False, fill_value=None
+            (x, y), sols_grid, method="linear", bounds_error=False, fill_value=None
         )
 
         def interpolator(xi, yi):
@@ -155,7 +167,6 @@ class RayleighOperator:
             return zi
 
         return interpolator
-
 
     def inner_product(self, u, v):
         eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
@@ -170,37 +181,30 @@ class RayleighOperator:
             proj = self.inner_product(u_orth, v) / self.inner_product(v, v)
             u_orth -= proj * v
         return u_orth / np.linalg.norm(u_orth)
-    
+
     def verify_eigenfunction(self, u, l, eigenvalue):
-        Au = self.a_u(u,l).reshape(self.gdata.m, self.gdata.m)
+        Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
         Au[~self.gdata.flag] = 0
         Au = Au.flatten()
-
         u_hat = Au / eigenvalue
         relative_error = np.linalg.norm(u_hat - u) / np.linalg.norm(u)
-
         return relative_error, u_hat
-    
+
     def verify_eigenfunction1(self, u, l, lambdaU):
         Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
         Au[~self.gdata.flag] = 0
         Au = Au.flatten()
-
-        residual = np.linalg.norm(Au - lambdaU*u) / np.linalg.norm(u)
+        residual = np.linalg.norm(Au - lambdaU * u) / np.linalg.norm(u)
         return residual, Au
 
     def qrSolve_shift(self, rhs, shift, l):
         rct_shifted = self.make_rct_matrix_shift(l, shift).astype(np.complex128)
         rhs = rhs.astype(np.complex128)
-
-        Q, R = np.linalg.qr(rct_shifted)  
-
+        Q, R = np.linalg.qr(rct_shifted)
         y = scipy.linalg.solve_triangular(R.conj().T, rhs, lower=True)
-
         u_small = Q @ y
         u_full_grid = np.zeros((self.gdata.m, self.gdata.m), dtype=np.complex128)
         u_full_grid[self.gdata.flag] = u_small[: self.gdata.k]
-
         u = self.ker(u_full_grid, l).flatten().astype(np.complex128)
         Au = self.a_u(u, l)
         residual = np.linalg.norm(Au - shift * u)
@@ -211,62 +215,80 @@ class RayleighOperator:
         eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
         weights = self.gdata.weights
         Au = Au.flatten()
-        Au_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, np.conj(u) * Au)
-
+        Au_interp_func = self.interpolate_solution1(
+            self.gdata.x1, self.gdata.x2, np.conj(u) * Au
+        )
         Au_eval = Au_interp_func(eval_xi, eval_yi)
-        u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, np.conj(u) * u)
+        u_interp_func = self.interpolate_solution1(
+            self.gdata.x1, self.gdata.x2, np.conj(u) * u
+        )
         uu_eval = u_interp_func(eval_xi, eval_yi)
         numerator = np.sum(weights * Au_eval)
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
+
+    def solve_single_eigenpair(self, l, eigenfunctions=None):
+        if eigenfunctions is None:
+            eigenfunctions = []
+
+        u0 = self.get_initial_guess(eigenfunctions)
+        u, lambdaU, iterations = self.rq_int_iter_eig(
+            l, u0=u0, eigenfunctions=eigenfunctions
+        )
+        rel_error, _ = self.verify_eigenfunction(u, l, lambdaU)
+        return u, lambdaU, iterations, rel_error
 
     def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
         if eigenfunctions is None:
             eigenfunctions = []
 
         if u0 is None:
-            x, y = self.gdata.x1.flatten(), self.gdata.x2.flatten()
-            r = np.sqrt(x**2 + y**2)
-            u0 = 1 - r / 0.95
-            u0 /= np.linalg.norm(u0)
+            u0 = self.get_initial_guess(eigenfunctions)
 
         u = u0.astype(np.complex128)
+        u /= np.linalg.norm(u)
 
-        au = self.a_u(u, l)
-        shift = self.rq_int(u, au)
+        Au = self.a_u(u, l)
+        shift = self.rq_int(u, Au)
 
         rhs_b = np.zeros(self.gdata.p, dtype=np.complex128)
-        rhs_i = np.ones(self.gdata.k, dtype=np.complex128)
-        rhs = np.hstack((rhs_i, rhs_b))
 
         for iteration in range(1, max_iter + 1):
-            u_new = self.qrSolve_shift(rhs, shift, l)
+            residual = Au - shift * u
+            gamma = np.linalg.norm(residual)
+
+            shift_perturbed = shift + 1j * gamma
+
+            # Create new RHS from u: interior points + zero boundary
+            rhs_i = u[self.gdata.flag.flatten()]
+            rhs = np.hstack((rhs_i, rhs_b))
+
+            u_new = self.qrSolve_shift(rhs, shift_perturbed, l)
             u_new = u_new.astype(np.complex128)
             u_new /= np.linalg.norm(u_new)
+            au_new = self.a_u(u_new, l)
+            shift_new = self.rq_int(u_new, au_new)
 
             if eigenfunctions:
                 u_new = self.orthogonalize(u_new, eigenfunctions)
-
-            au_new = self.a_u(u_new, l)
-            shift_new = self.rq_int(u_new, au_new)
 
             res1 = np.linalg.norm(u_new - u)
             res2 = np.linalg.norm(u_new + u)
 
             print(
-                f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={res1:.2e}, Residual2={res2:.2e}"
+                f"Iteration {iteration}: Shift={shift:.8f}, γ={gamma:.2e}, Residual1={res1:.2e}, Residual2={res2:.2e}"
             )
 
             if res1 < tol or res2 < tol:
                 print(f"Converged after {iteration} iterations.")
-                return u_new, shift_new, iteration
+                return u_new, shift, iteration
 
             u = u_new
             shift = shift_new
 
-            u_grid = u.reshape(self.gdata.m, self.gdata.m)
-            rhs_i = u_grid[self.gdata.flag]
-            rhs = np.hstack((rhs_i, rhs_b))
+            # u_grid = u.reshape(self.gdata.m, self.gdata.m)
+            # rhs_i = u_grid[self.gdata.flag]
+            # rhs = np.hstack((rhs_i, rhs_b))
 
         print("Maximum iterations reached.")
-        return u, shift, iteration
+        return u, shift, max_iter

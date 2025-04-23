@@ -7,9 +7,6 @@ from rayleigh_operator import RayleighOperator
 from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
 
-
-
-
 nr_quad = 20
 ntheta_quad = 60
 
@@ -32,15 +29,15 @@ def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
 
     results = dict()
-    results["p"] = [1]  # Polynomial degrees
-    results["pts"] = [30, 40, 50]  # Grid resolutions
+    results["p"] = [1]#[1, 2, 3]  # Polynomial degrees
+    results["pts"] = [60] #[30, 40, 50, 60]  # Grid resolutions
     num_eigfuncs = 3
-    
+
     results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs))
-    results["eigenvalues"] = np.zeros_like(results["L2"])
+    results["eigenvalues"] = np.zeros_like(results["L2"], dtype=np.complex128)
     results["iterations"] = np.zeros_like(results["L2"], dtype=int)
     results["orthogonality"] = np.zeros(
-        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs)
+        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs), dtype=np.complex128
     )
 
     for l_idx, l in enumerate(results["p"]):
@@ -61,14 +58,13 @@ def main():
             eigvals = []
 
             for eigen_idx in range(num_eigfuncs):
-                mode =  1
+                mode = eigen_idx + 1
                 u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
                 u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
                 relative_error_verification, u_hat = odata.verify_eigenfunction(u, l, lambdaU)
                 print(f"Eigenfunction verification relative error: {relative_error_verification:.2e}")
-
 
                 sol = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 sol_norm = np.linalg.norm(sol[gdata.flag])
@@ -87,6 +83,9 @@ def main():
                 print(f"Relative L2 Error (Eigenfunction {eigen_idx+1}): {rel_error:.2e}")
                 print(f"Computed Eigenvalue: {lambdaU:.4f}, Iterations: {iterations}")
 
+                # Plot eigenfunction with title
+                plot_eigenfunction(u, gdata)
+
             for i in range(num_eigfuncs):
                 for j in range(num_eigfuncs):
                     iprod = odata.inner_product(eigfuncs[i], eigfuncs[j])
@@ -95,20 +94,6 @@ def main():
                         print(f"Orthogonality <ψ{i},ψ{j}>: {iprod:.2e}")
 
     print("\n########-Done-########\n")
-        
+
 if __name__ == "__main__":
     main()
-   # Generate convergence plots
-       # After main(), add:
-    # from print_results import make_graph, make_chart
-    # from make_graph_rq import make_graph_qr
-    # from make_chart_rq import make_chart_qr
-
-    # # Generate convergence plots
-    # make_graph(results, "eigenvalues", title="Eigenvalue Convergence")
-    # make_chart(results, "L2", title="L2 Error vs Grid Resolution")
-    #plot_eigenfunction(u, gdata)
-        
-
-
- 

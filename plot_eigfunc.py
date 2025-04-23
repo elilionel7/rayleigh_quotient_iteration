@@ -1,3 +1,4 @@
+# plot_eigfunc.py
 import matplotlib.pyplot as plt
 
 def plot_eigenfunction(u, gdata):
