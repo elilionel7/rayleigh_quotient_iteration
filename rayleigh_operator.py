@@ -61,11 +61,18 @@ class RayleighOperator:
         w2 = idct(w2, axis=0)
         z = w1 + w2
         return z
-
+    
     def C(self, w):
         b = self.gdata.xx.dot(w)
         w = np.reshape(w, (self.gdata.m, self.gdata.m))
-        z = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
+        z = self.lap(w) + np.transpose(self.lap(np.transpose(w))) 
+        z = z[self.gdata.flag]
+        return np.hstack((z, b))
+
+    def C_shift(self, w, shift=0):
+        b = self.gdata.xx.dot(w)
+        w = np.reshape(w, (self.gdata.m, self.gdata.m))
+        z = self.lap(w) + np.transpose(self.lap(np.transpose(w))) - shift * w
         z = z[self.gdata.flag]
         return np.hstack((z, b))
 
@@ -100,6 +107,12 @@ class RayleighOperator:
         w = self.Ct(w)
         w = self.ker(w)
         w = self.C(w)
+        return w
+    
+    def M_shift(self, w, shift):    
+        w = self.Ct_shift(w, shift)
+        w = self.ker(w)
+        w = self.C_shift(w, shift)
         return w
 
     def make_rct_matrix_shift(self, l, shift):
