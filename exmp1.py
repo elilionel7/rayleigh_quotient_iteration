@@ -37,10 +37,10 @@ def main():
     num_eigfuncs = 3
     
     results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs))
-    results["eigenvalues"] = np.zeros_like(results["L2"])
+    results["eigenvalues"] = np.zeros_like(results["L2"], dtype=np.complex128)
     results["iterations"] = np.zeros_like(results["L2"], dtype=int)
     results["orthogonality"] = np.zeros(
-        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs)
+        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs), dtype=np.complex128
     )
 
     for l_idx, l in enumerate(results["p"]):
