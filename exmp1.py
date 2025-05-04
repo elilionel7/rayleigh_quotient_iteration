@@ -6,6 +6,7 @@ from scipy.special import jv, jn_zeros
 from rayleigh_operator import RayleighOperator
 from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
+from plot_boundary import plot_boundary_check
 
 
 nr_quad = 20
@@ -13,18 +14,23 @@ ntheta_quad = 60
 
 j0 = jn_zeros(0, 1)[0]  
 
-def exact_eigenfunc(x, y, mode=1):
+
+def exact_eigenfunc(x, y, mode=1, R=0.95):
     r = np.sqrt(x**2 + y**2)
     theta = np.arctan2(y, x)
     if mode == 1:
         j0_k = jn_zeros(0, 1)[0]
-        return jv(0, j0_k * r / 0.95)
+        u = jv(0, j0_k * r / R)
     elif mode == 2:
         j1_k = jn_zeros(1, 1)[0]
-        return jv(1, j1_k * r / 0.95) * np.cos(theta)
+        u = jv(1, j1_k * r / R) * np.cos(theta)
     elif mode == 3:
         j1_k = jn_zeros(1, 1)[0]
-        return jv(1, j1_k * r / 0.95) * np.sin(theta)
+        u = jv(1, j1_k * r / R) * np.sin(theta)
+    else:
+        raise ValueError("Mode not supported")
+    u[r >= R] = 0
+    return u.real  
 
 def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
@@ -64,7 +70,7 @@ def main():
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
                 u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
-                relative_error_verification, u_hat = odata.verify_eigenfunction(u, l, lambdaU)
+                relative_error_verification, _ = odata.verify_eigenfunction(u, l, lambdaU)
                 print(f"Eigenfunction verification relative error: {relative_error_verification:.2e}")
 
 

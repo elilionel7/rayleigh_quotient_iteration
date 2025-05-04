@@ -15,6 +15,15 @@ def trapezoidal_weights(n, a=0.0, b=2 * np.pi):
     w[0] = w[-1] = h / 2
     return w
 
+# def trapezoidal_weights(n, a=0.0, b=2 * np.pi):
+#     if n % 2 == 0:
+#         n += 1
+#     h = (b - a) / (n - 1)
+#     w = np.ones(n) * 2/3
+#     w[1::2] = 4/3
+#     w[0] = w[-1] = 1/3
+#     return w * h
+
 
 
 def radial_nodes_and_weights(nr, r0=0.0, r1= 0.95):
