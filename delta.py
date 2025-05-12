@@ -1,6 +1,6 @@
+# delta.py
 import numpy as np
 from scipy.sparse import csr_matrix, kron
-#import pdb
 
 def dirac(x,grid,order='cubic'):
     if order == 'spectral':
@@ -40,10 +40,10 @@ def ddirac(x,grid,order='spectral'):
         w = (-1)**fs*np.sin((2*fs+1)*np.pi/(2*m)) 
         xx = w/(x-grid)
         xx2 = w/(x-grid)**2
-        a = -xx2/np.sum(xx) + xx * np.sum(xx2) / np.sum(xx)**2;
-        return a;
+        a = -xx2/np.sum(xx) + xx * np.sum(xx2) / np.sum(xx)**2
+        return a
     
 def dvdirac(x,v,grid,order='spectral'):
-    a=v[0]*np.outer(ddirac(x[0],grid,order),dirac(x[1],grid,order)).flatten();
-    b=v[1]*np.outer(dirac(x[0],grid,order),ddirac(x[1],grid,order)).flatten();
-    return a+b;
+    a=v[0]*np.outer(ddirac(x[0],grid,order),dirac(x[1],grid,order)).flatten()
+    b=v[1]*np.outer(dirac(x[0],grid,order),ddirac(x[1],grid,order)).flatten()
+    return a+b
