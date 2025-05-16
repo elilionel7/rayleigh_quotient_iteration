@@ -41,16 +41,12 @@ class grid_data:
         self.x = np.cos((2*np.arange(self.m)+1)*np.pi/(2*self.m))
         self.x1, self.x2 = np.meshgrid(self.x,self.x,indexing='ij')
 
-        # Compute trapizoidal quadrature weights
-    
-        # Radial nodes and weights
+
         self.r_quad, self.w_r_quad = radial_nodes_and_weights(self.nr_quad, r0=0.0, r1=0.95)
        
-
         # Angular nodes and weights
         self.theta_quad = get_trapezoidal_nodes(self.ntheta_quad, a=0.0, b=2 * np.pi)
         self.w_theta_quad = trapezoidal_weights(self.ntheta_quad)
-
 
         # Create 2D quadrature grid
         self.R_quad, self.Theta_quad = np.meshgrid(self.r_quad, self.theta_quad, indexing='ij')
@@ -76,8 +72,10 @@ class grid_data:
 
 #        Define the boundary. Currently implemented for star-shaped domains.
 #        self.b, self.flag = self.createbdry(bound)
-        bdry2 = [lambda x:np.arccos(bdry[0](x)), lambda x: np.arccos(bdry[1](x))];
-        self.b, self.bn, self.g_grid  = createbdry(bdry2,density*np.pi/self.m*2)
+        # bdry2 = [lambda x:np.arccos(bdry[0](x)), lambda x: np.arccos(bdry[1](x))];
+        # self.b, self.bn, self.g_grid  = createbdry(bdry2,density*np.pi/self.m*2)
+        self.b, self.bn, self.g_grid = createbdry(bdry, density*np.pi/self.m*2)
+
         self.flag = self.createflag(bdry)
         self.p = np.shape(self.b)[0]
         self.k = np.sum(self.flag)
@@ -174,6 +172,13 @@ class grid_data:
                        - np.roll(v1,-1,1) - np.roll(v1,1,1))
         return v[self.flag]
     
+# def createbdry(f, dx):
+#     theta = np.linspace(0, 2*np.pi, int(2*np.pi/dx), endpoint=False)
+#     b = 0.95 * np.column_stack([np.cos(theta), np.sin(theta)])
+#     bn = b / 0.95  # Unit normals
+#     return b, bn, theta
+    
+    
 def createbdry(f,dx):
 #        Find the length of the boundary curve.
     m = 8192
@@ -207,7 +212,9 @@ def createbdry(f,dx):
             bn = np.vstack((bn,BN[j,:]))
             g_grid = np.hstack((g_grid,2*np.pi*j/m))
             i = i + 1
-    b = np.cos(b)
+    # b = np.cos(b)
+    b = np.column_stack((f[0](g_grid), f[1](g_grid)))
+
     bn = np.vstack((bn[:,0]/-np.sqrt(1-b[:,0]**2),bn[:,1]/-np.sqrt(1-b[:,1]**2))).T
     bn_norm = np.outer(np.linalg.norm(bn,axis=1),np.array([1,1]))
     bn = bn/bn_norm

@@ -35,32 +35,84 @@ class RayleighOperator:
         )
         return w.flatten()
 
-    def lap(self, w):
-        w1 = np.copy(w)
-        w1 = dct(w1, axis=0) * -self.gdata.fx
-        w1 = np.roll(w1, -1, axis=0)
-        w1 = idst(w1, axis=0) / (2 * self.gdata.m)
-        w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
-        w2 = np.copy(w)
-        w2 = idct(dct(w2, axis=0) * -self.gdata.fx**2, axis=0) / (2 * self.gdata.m)
-        w2 = w2 * -1 / (1 - self.gdata.x1**2)
-        w = w2
-        w = w1 + w2
-        return w
+    # def lap(self, w):
+    #     w1 = np.copy(w)
+    #     w1 = dct(w1, axis=0) * -self.gdata.fx
+    #     w1 = np.roll(w1, -1, axis=0)
+    #     w1 = idst(w1, axis=0) / (2 * self.gdata.m)
+    #     w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
+    #     w2 = np.copy(w)
+    #     w2 = idct(dct(w2, axis=0) * -self.gdata.fx**2, axis=0) / (2 * self.gdata.m)
+    #     w2 = w2 * -1 / (1 - self.gdata.x1**2)
+    #     w = w2
+    #     w = w1 + w2
+    #     return  w
     
+    # def lap(self, w):
+    #     dx = dy = 2*0.95 / (self.gdata.m - 1)
+    #     lap_w = (
+    #         np.roll(w, -1, axis=0) + np.roll(w, 1, axis=0) +
+    #         np.roll(w, -1, axis=1) + np.roll(w, 1, axis=1) -
+    #         4 * w
+    #     ) / (dx * dy)
+    #     lap_w[~self.gdata.flag] = 0
+    #     return lap_w
+
+    def lap(self, w):
+        m = self.gdata.m
+        x1, x2 = self.gdata.x1, self.gdata.x2
+        r = np.sqrt(x1**2 + x2**2)
+        theta = np.arctan2(x2, x1)
+
+        dr = 0.95 / (m - 1)
+        dtheta = 2 * np.pi / (m - 1)
+
+        lap_w = np.zeros_like(w)
+
+        for i in range(1, m - 1):
+            for j in range(1, m - 1):
+                if not self.gdata.flag[i, j]:
+                    continue
+                r_ij = r[i, j]
+
+                # Radial and angular finite differences
+                wr_plus = w[i + 1, j]
+                wr = w[i, j]
+                wr_minus = w[i - 1, j]
+
+                wtheta_plus = w[i, j + 1]
+                wtheta = w[i, j]
+                wtheta_minus = w[i, j - 1]
+
+                term_r = (wr_plus - 2 * wr + wr_minus) / (dr ** 2) + \
+                        (wr_plus - wr_minus) / (2 * r_ij * dr)
+
+                term_theta = (wtheta_plus - 2 * wtheta + wtheta_minus) / (r_ij ** 2 * dtheta ** 2)
+
+                lap_w[i, j] = term_r + term_theta
+
+        lap_w[~self.gdata.flag] = 0
+        return lap_w
+
+
+    
+    # def lapt(self, w):
+    #     w1 = np.copy(w)
+    #     w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
+    #     w1 = dst(w1, axis=0) / (2 * (self.gdata.m))
+    #     w1 = np.roll(w1, 1, axis=0)
+    #     w1 = idct(w1 * -self.gdata.fx, axis=0)
+    #     w2 = np.copy(w)
+    #     w2 = w2 * -1 / (1 - self.gdata.x1**2)
+    #     w2 = dct(w2, axis=0) / (2 * (self.gdata.m))
+    #     w2 = w2 * -self.gdata.fx**2
+    #     w2 = idct(w2, axis=0)
+    #     z = w1 + w2
+    #     return z
     def lapt(self, w):
-        w1 = np.copy(w)
-        w1 = w1 * self.gdata.x1 / (1 - self.gdata.x1**2) ** (3 / 2)
-        w1 = dst(w1, axis=0) / (2 * (self.gdata.m))
-        w1 = np.roll(w1, 1, axis=0)
-        w1 = idct(w1 * -self.gdata.fx, axis=0)
-        w2 = np.copy(w)
-        w2 = w2 * -1 / (1 - self.gdata.x1**2)
-        w2 = dct(w2, axis=0) / (2 * (self.gdata.m))
-        w2 = w2 * -self.gdata.fx**2
-        w2 = idct(w2, axis=0)
-        z = w1 + w2
-        return z
+        # For a finite-difference Laplacian, adjoint equals original Laplacian
+        return self.lap(w)
+
     
     def C(self, w):
         b = self.gdata.xx.dot(w)
@@ -92,15 +144,42 @@ class RayleighOperator:
         z += self.gdata.xxT.dot(w[-self.gdata.p :])
         return z
 
+    # def precond(self, w):
+    #     w1 = w[: self.gdata.k]
+    #     if self.l == 3:
+    #         w1 += self.gdata.FD(w1)
+    #     elif self.l == 4:
+    #         w1 += self.gdata.FD(2 * w1 + self.gdata.FD(w1))
+    #     elif self.l == 5:
+    #         w1 += self.gdata.FD(3 * w1 + self.gdata.FD(3 * w1 + self.gdata.FD(w1)))
+    #     w2 = scipy.linalg.lu_solve(self.gdata.B, w[-self.gdata.p :])
+    #     return np.hstack((w1, w2))
+
     def precond(self, w):
-        w1 = w[: self.gdata.k]
-        if self.l == 3:
-            w1 += self.gdata.FD(w1)
-        elif self.l == 4:
-            w1 += self.gdata.FD(2 * w1 + self.gdata.FD(w1))
-        elif self.l == 5:
-            w1 += self.gdata.FD(3 * w1 + self.gdata.FD(3 * w1 + self.gdata.FD(w1)))
-        w2 = scipy.linalg.lu_solve(self.gdata.B, w[-self.gdata.p :])
+        # Split into interior and boundary components
+        w1 = w[:self.gdata.k]  # Shape: (k,)
+        w2 = w[-self.gdata.p:]  # Shape: (p,)
+
+        # Map w1 (1D interior) to 2D grid
+        w_grid = np.zeros((self.gdata.m, self.gdata.m), dtype=w1.dtype)
+        w_grid[self.gdata.flag] = w1  # Place interior values onto grid
+
+        # Apply frequency-domain preconditioning
+        if self.l >= 3:
+            # Compute DCT of the grid
+            w_dct = dctn(w_grid, norm='ortho')
+            # Frequency filter (1 + fx² + fy²)^{-l}
+            freq_filter = (1 + self.gdata.fx**2 + self.gdata.fy**2)**-self.l
+            w_filtered = idctn(w_dct * freq_filter, norm='ortho')
+            # Extract interior points after filtering
+            w1 = w_filtered[self.gdata.flag].flatten()
+        else:
+            # Handle lower-order preconditioning if needed
+            pass
+
+        # Solve boundary system
+        w2 = scipy.linalg.lu_solve(self.gdata.B, w2)
+
         return np.hstack((w1, w2))
 
     def M(self, w):
@@ -126,9 +205,10 @@ class RayleighOperator:
     def a_u(self, u,l):
         u = self.ker(u,l)
         w = np.reshape(u, (self.gdata.m, self.gdata.m))
-        Au_full_grid = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
+        Au = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
+        Au[~self.gdata.flag] = 0
         
-        return Au_full_grid.flatten()
+        return Au.flatten()
 
     def interpolate_solution(self, x, y, sols):
         x = x.flatten()
@@ -233,7 +313,7 @@ class RayleighOperator:
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None, shift=None):
         if eigenfunctions is None:
             eigenfunctions = []
 
@@ -245,8 +325,11 @@ class RayleighOperator:
 
         u = u0.astype(np.complex128)
 
-        au = self.a_u(u, l)
-        shift = self.rq_int(u, au)
+        if shift is None:
+            au = self.a_u(u, l)
+            shift = self.rq_int(u, au)
+        else:
+            shift = complex(shift)
 
         rhs_b = np.zeros(self.gdata.p, dtype=np.complex128)
         rhs_i = np.ones(self.gdata.k, dtype=np.complex128)
