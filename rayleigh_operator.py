@@ -1,5 +1,4 @@
 # rayleigh_operator.py
-
 import numpy as np
 from scipy.fftpack import dct as dct
 from scipy.fftpack import idct as idct
@@ -10,6 +9,7 @@ from scipy.fftpack import idst as idst
 from scipy.sparse.linalg import LinearOperator
 from scipy.interpolate import griddata
 from scipy.interpolate import RegularGridInterpolator
+from scipy.linalg import lstsq
 
 import scipy
 
@@ -117,23 +117,6 @@ class RayleighOperator:
         
         return Au_full_grid.flatten()
 
-    def interpolate_solution(self, x, y, sols):
-        x = x.flatten()
-        y = y.flatten()
-        values = sols.flatten()
-        pnts = np.column_stack((x, y))
-        
-
-
-        def interp_func(xi, yi):
-            xi = np.asarray(xi).flatten()
-            yi = np.asarray(yi).flatten()
-            zi = griddata(pnts, values, (xi, yi), method="cubic")
-            return zi
-
-        return interp_func
-    
-
     def interpolate_solution1(self, x, y, sols):
     
         x = np.unique(x)
@@ -171,41 +154,22 @@ class RayleighOperator:
             u_orth -= proj * v
         return u_orth / np.linalg.norm(u_orth)
     
-    def verify_eigenfunction(self, u, l, eigenvalue):
-        Au = self.a_u(u,l).reshape(self.gdata.m, self.gdata.m)
-        Au[~self.gdata.flag] = 0
-        Au = Au.flatten()
-
-        u_hat = Au / eigenvalue
-        relative_error = np.linalg.norm(u_hat - u) / np.linalg.norm(u)
-
-        return relative_error, u_hat
-    
-    def verify_eigenfunction1(self, u, l, lambdaU):
-        Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
-        Au[~self.gdata.flag] = 0
-        Au = Au.flatten()
-
-        residual = np.linalg.norm(Au - lambdaU*u) / np.linalg.norm(u)
-        return residual, Au
-
-    def qrSolve_shift(self, rhs, shift, l):
-        rct_shifted = self.make_rct_matrix_shift(l, shift).astype(np.complex128)
-        rhs = rhs.astype(np.complex128)
-
-        Q, R = np.linalg.qr(rct_shifted)  
-
-        y = scipy.linalg.solve_triangular(R.conj().T, rhs, lower=True)
-
-        u_small = Q @ y
+    def least_squares_shift(self, rhs, shift, l):
+        
+        rct_shifted = self.make_rct_matrix_shift(l, shift).astype(np.complex128)  
+        rhs = rhs.astype(np.complex128)  # (m**2,)
+        
+        sol, residuals, rank, s = scipy.linalg.lstsq(rct_shifted.T, rhs)
         u_full_grid = np.zeros((self.gdata.m, self.gdata.m), dtype=np.complex128)
-        u_full_grid[self.gdata.flag] = u_small[: self.gdata.k]
+        u_full_grid[self.gdata.flag] = sol[: self.gdata.k]
 
         u = self.ker(u_full_grid, l).flatten().astype(np.complex128)
         Au = self.a_u(u, l)
         residual = np.linalg.norm(Au - shift * u)
         print(f"Shift={shift:.4f}, Residual={residual:.2e}")
         return u
+
+
 
     def rq_int(self, u, Au):
         eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
@@ -220,7 +184,8 @@ class RayleighOperator:
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
 
-    def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+    def rq_int_iter_eig_ls(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
+        
         if eigenfunctions is None:
             eigenfunctions = []
 
@@ -231,7 +196,6 @@ class RayleighOperator:
             u0 /= np.linalg.norm(u0)
 
         u = u0.astype(np.complex128)
-
         au = self.a_u(u, l)
         shift = self.rq_int(u, au)
 
@@ -240,7 +204,7 @@ class RayleighOperator:
         rhs = np.hstack((rhs_i, rhs_b))
 
         for iteration in range(1, max_iter + 1):
-            u_new = self.qrSolve_shift(rhs, shift, l)
+            u_new = self.least_squares_shift(rhs, shift, l)
             u_new = u_new.astype(np.complex128)
             u_new /= np.linalg.norm(u_new)
 

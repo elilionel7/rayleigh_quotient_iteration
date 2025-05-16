@@ -11,7 +11,7 @@ from plot_eigfunc import plot_eigenfunction
 
 
 nr_quad = 20
-ntheta_quad = 60
+ntheta_quad = 50
 
 j0 = jn_zeros(0, 1)[0]  
 
@@ -32,7 +32,7 @@ def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
 
     results = dict()
-    results["p"] = [1]  # Polynomial degrees
+    results["p"] = [3]  # Polynomial degrees
     results["pts"] = [30, 40, 50]  # Grid resolutions
     num_eigfuncs = 3
     
@@ -65,7 +65,7 @@ def main():
                 u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 u0 = u0.flatten()
                 u0 /= np.linalg.norm(u0)
-                u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
+                u, lambdaU, iterations = odata.rq_int_iter_eig_ls(l, eigenfunctions=eigfuncs)
                 relative_error_verification, u_hat = odata.verify_eigenfunction(u, l, lambdaU)
                 print(f"Eigenfunction verification relative error: {relative_error_verification:.2e}")
 
@@ -98,17 +98,7 @@ def main():
         
 if __name__ == "__main__":
     main()
-   # Generate convergence plots
-       # After main(), add:
-    # from print_results import make_graph, make_chart
-    # from make_graph_rq import make_graph_qr
-    # from make_chart_rq import make_chart_qr
-
-    # # Generate convergence plots
-    # make_graph(results, "eigenvalues", title="Eigenvalue Convergence")
-    # make_chart(results, "L2", title="L2 Error vs Grid Resolution")
-    #plot_eigenfunction(u, gdata)
-        
+  
 
 
  
