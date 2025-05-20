@@ -7,13 +7,10 @@ from rayleigh_operator import RayleighOperator
 from grid_data2 import grid_data
 from plot_eigfunc import plot_eigenfunction
 
-
-
-
 nr_quad = 20
 ntheta_quad = 60
 
-j0 = jn_zeros(0, 1)[0]  
+j0 = jn_zeros(0, 1)[0]
 
 def exact_eigenfunc(x, y, mode=1):
     r = np.sqrt(x**2 + y**2)
@@ -32,15 +29,15 @@ def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
 
     results = dict()
-    results["p"] = [1]  # Polynomial degrees
+    results["p"] = [2]  # Polynomial degrees
     results["pts"] = [30, 40, 50]  # Grid resolutions
     num_eigfuncs = 3
-    
-    results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs))
-    results["eigenvalues"] = np.zeros_like(results["L2"], dtype=np.complex128)
+
+    results["L2"] = np.zeros((len(results["p"]), len(results["pts"]), num_eigfuncs), dtype=float)
+    results["eigenvalues"] = np.zeros_like(results["L2"], dtype=float)
     results["iterations"] = np.zeros_like(results["L2"], dtype=int)
     results["orthogonality"] = np.zeros(
-        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs), dtype=np.complex128
+        (len(results["p"]), len(results["pts"]), num_eigfuncs, num_eigfuncs), dtype=float
     )
 
     for l_idx, l in enumerate(results["p"]):
@@ -55,30 +52,32 @@ def main():
                 order="spectral",
                 nr_quad=nr_quad, ntheta_quad=ntheta_quad
             )
-            odata = RayleighOperator(gdata, l, precond=True)  
+            odata = RayleighOperator(gdata, l, precond=True)
 
             eigfuncs = []
             eigvals = []
 
             for eigen_idx in range(num_eigfuncs):
-                mode =  1
+                mode = 1
                 u0 = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
-                u0 = u0.flatten()
+                u0 = u0.flatten().real  # Ensure purely real
                 u0 /= np.linalg.norm(u0)
                 u, lambdaU, iterations = odata.rq_int_iter_eig(l, eigenfunctions=eigfuncs)
+                u = u.real  # Ensure purely real
+                lambdaU = np.real(lambdaU)
                 relative_error_verification, u_hat = odata.verify_eigenfunction(u, l, lambdaU)
+                relative_error_verification = np.real(relative_error_verification)
                 print(f"Eigenfunction verification relative error: {relative_error_verification:.2e}")
-
 
                 sol = exact_eigenfunc(gdata.x1, gdata.x2, mode=mode)
                 sol_norm = np.linalg.norm(sol[gdata.flag])
 
-                u_interior = u[:gdata.k]  
-                sol_interior = sol[gdata.flag]  
-                
+                u_interior = u[:gdata.k]
+                sol_interior = sol[gdata.flag]
+
                 sign = np.sign(np.dot(u_interior, sol_interior))
                 rel_error = np.linalg.norm(sign * u_interior - sol_interior) / sol_norm
-                
+
                 eigfuncs.append(u)
                 results["eigenvalues"][l_idx, k_idx, eigen_idx] = lambdaU
                 results["iterations"][l_idx, k_idx, eigen_idx] = iterations
@@ -90,25 +89,12 @@ def main():
             for i in range(num_eigfuncs):
                 for j in range(num_eigfuncs):
                     iprod = odata.inner_product(eigfuncs[i], eigfuncs[j])
+                    iprod = np.real(iprod)
                     results["orthogonality"][l_idx, k_idx, i, j] = iprod
                     if i != j:
                         print(f"Orthogonality <ψ{i},ψ{j}>: {iprod:.2e}")
 
     print("\n########-Done-########\n")
-        
+
 if __name__ == "__main__":
     main()
-   # Generate convergence plots
-       # After main(), add:
-    # from print_results import make_graph, make_chart
-    # from make_graph_rq import make_graph_qr
-    # from make_chart_rq import make_chart_qr
-
-    # # Generate convergence plots
-    # make_graph(results, "eigenvalues", title="Eigenvalue Convergence")
-    # make_chart(results, "L2", title="L2 Error vs Grid Resolution")
-    #plot_eigenfunction(u, gdata)
-        
-
-
- 
