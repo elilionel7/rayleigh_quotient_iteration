@@ -176,9 +176,10 @@ class RayleighOperator:
         Q, R = np.linalg.qr(rct_shifted)
         y = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
         u_small = Q @ y
-        u_full_grid = np.zeros((self.gdata.m, self.gdata.m))
-        u_full_grid[self.gdata.flag] = u_small[: self.gdata.k]
-        u = self.ker(u_full_grid, l).flatten()
+        m = self.gdata.m
+        u_grid = u_small.reshape((m, m))  
+
+        u = self.ker(u_grid, l).flatten()
         Au = self.a_u(u, l)
         residual = np.linalg.norm(Au - shift * u)
         print(f"Shift={shift:.4f}, Residual={residual:.2e}")
@@ -197,9 +198,6 @@ class RayleighOperator:
         return numerator / denominator
 
     def build_C_matrix(self, C_func, n):
-        # C_func: function that takes a vector and returns C*v
-        # n: number of columns (dimension of v)
-        # Returns: Cmat, shape (m, n)
         v = np.zeros(n)
         C_cols = []
         for i in range(n):
@@ -208,26 +206,17 @@ class RayleighOperator:
             C_cols.append(C_func(v).copy())
         return np.column_stack(C_cols)
 
-    def seem_eig_shift(self, shift):
-        """
-        Solve min 0.5*||u||_S^2 subject to C_shift(u, shift) = 0
-        Returns the smoothest nontrivial u in the nullspace of the shifted operator.
-        """
-        n = self.gdata.m ** 2
-        # Build C_shift matrix
-        Cmat = self.build_C_matrix(lambda w: self.C_shift(w, shift), n)
-        # Smoother (identity for simplicity)
-        S = np.eye(n)
-        Sinv = np.eye(n)
-        # Schur complement
-        M = Cmat @ Sinv @ Cmat.T
-        # Right-hand side is zero
-        b = np.zeros(M.shape[0])
-        # Solve for Lagrange multipliers
-        lam = np.linalg.solve(M, b)
-        # u = S^{-1} C^T lam
-        u = Sinv @ Cmat.T @ lam
-        return u
+    # def seem_eig_shift(self, shift):
+        
+    #     n = self.gdata.m ** 2
+    #     Cmat = self.build_C_matrix(lambda w: self.C_shift(w, shift), n)
+    #     S = np.eye(n)
+    #     Sinv = np.eye(n)
+    #     M = Cmat @ Sinv @ Cmat.T
+    #     b = np.zeros(M.shape[0])
+    #     lam = np.linalg.solve(M, b)
+    #     u = Sinv @ Cmat.T @ lam
+    #     return u
 
 
 
@@ -248,18 +237,7 @@ class RayleighOperator:
         rhs_b = np.zeros(self.gdata.p)
         rhs_i = np.ones(self.gdata.k)
         rhs = np.hstack((rhs_i, rhs_b))
-        rhs0 = np.copy(rhs)
-        # C_eye = np.eye(self.gdata.m**2)
-        # C_matrix = np.column_stack([self.C(self.ker(C_eye[:, i], l)) for i in range(C_eye.shape[1])])
-        # C_rank = np.linalg.matrix_rank(C_matrix)
-        # print(f"Rank of C matrix: {C_rank} / {C_matrix.shape[0]} (rows), full row rank = {C_rank == C_matrix.shape[0]}")
-
         
-        # n = self.gdata.m**2  # set this to the correct value, e.g., odata.gdata.m**2 or similar
-        # Cmat = self.build_C_matrix(self.C, n)
-        # print("C shape:", Cmat.shape)
-        # print("C rank:", np.linalg.matrix_rank(Cmat))
-
         for iteration in range(1, max_iter + 1):
             u_new = self.qrSolve_shift(rhs, shift, l)
             # u_new = self.seem_eig_shift(shift)
@@ -268,7 +246,7 @@ class RayleighOperator:
             u_new /= np.linalg.norm(u_new)
             
             
-            cu_res= np.linalg.norm(Cu - rhs0)/np.linalg.norm(rhs0) 
+            cu_res= np.linalg.norm(Cu - rhs)/np.linalg.norm(rhs) 
             print(f"Relative constraint residual (||Cu - rhs||/||rhs||): {cu_res:.2e}")
 
 
