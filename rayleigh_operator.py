@@ -6,6 +6,7 @@ from scipy.sparse.linalg import LinearOperator
 from scipy.interpolate import griddata, RegularGridInterpolator
 import scipy
 
+
 class RayleighOperator:
     def __init__(self, gdata, l, precond=True):
         self.gdata = gdata
@@ -20,7 +21,10 @@ class RayleighOperator:
         if l is None:
             l = self.l
         w = np.reshape(w, (self.gdata.m, self.gdata.m))
-        w = idctn(dctn(w) * (1 + self.gdata.fx**2 + self.gdata.fy**2) ** -l) / (2 * self.gdata.m) ** 2
+        w = (
+            idctn(dctn(w) * (1 + self.gdata.fx**2 + self.gdata.fy**2) ** -l)
+            / (2 * self.gdata.m) ** 2
+        )
         return w.flatten()
 
     def lap(self, w):
@@ -56,7 +60,7 @@ class RayleighOperator:
         z = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
         z = z[self.gdata.flag]
         return np.hstack((z, b))
-    
+
     def C_shift(self, w, shift=0):
         b = self.gdata.xx.dot(w)
         w = np.reshape(w, (self.gdata.m, self.gdata.m))
@@ -131,8 +135,9 @@ class RayleighOperator:
         y = np.unique(y)
         sols_grid = sols.reshape(len(x), len(y))
         interp_func = RegularGridInterpolator(
-            (x, y), sols_grid, method='linear', bounds_error=False, fill_value=None
+            (x, y), sols_grid, method="cubic", bounds_error=False, fill_value=None
         )
+
         def interpolator(xi, yi):
             xi = np.asarray(xi).flatten()
             yi = np.asarray(yi).flatten()
@@ -140,6 +145,7 @@ class RayleighOperator:
             zi = interp_func(interp_points)
             zi = np.nan_to_num(zi, nan=0.0)
             return zi
+
         return interpolator
 
     def inner_product(self, u, v):
@@ -158,18 +164,10 @@ class RayleighOperator:
 
     def verify_eigenfunction(self, u, l, eigenvalue):
         Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
-        Au[~self.gdata.flag] = 0
         Au = Au.flatten()
         u_hat = Au / eigenvalue
         relative_error = np.linalg.norm(u_hat - u) / np.linalg.norm(u)
         return relative_error, u_hat
-
-    def verify_eigenfunction1(self, u, l, lambdaU):
-        Au = self.a_u(u, l).reshape(self.gdata.m, self.gdata.m)
-        Au[~self.gdata.flag] = 0
-        Au = Au.flatten()
-        residual = np.linalg.norm(Au - lambdaU*u) / np.linalg.norm(u)
-        return residual, Au
 
     def qrSolve_shift(self, rhs, shift, l):
         rct_shifted = self.make_rct_matrix_shift(l, shift)
@@ -177,47 +175,27 @@ class RayleighOperator:
         y = scipy.linalg.solve_triangular(R.T, rhs, lower=True)
         u_small = Q @ y
         m = self.gdata.m
-        u_grid = u_small.reshape((m, m))  
+        u_grid = u_small.reshape((m, m))
 
         u = self.ker(u_grid, l).flatten()
         Au = self.a_u(u, l)
         residual = np.linalg.norm(Au - shift * u)
-        print(f"Shift={shift:.4f}, Residual={residual:.2e}")
+        print(f"From qr_shift, Shift={shift:.4f}, Residual={residual:.2e}")
         return u
 
     def rq_int(self, u, Au):
         eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
         weights = self.gdata.weights
         Au = Au.flatten()
-        Au_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * Au)
+        Au_interp_func = self.interpolate_solution1(
+            self.gdata.x1, self.gdata.x2, u * Au
+        )
         Au_eval = Au_interp_func(eval_xi, eval_yi)
         u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * u)
         uu_eval = u_interp_func(eval_xi, eval_yi)
         numerator = np.sum(weights * Au_eval)
         denominator = np.sum(weights * uu_eval)
         return numerator / denominator
-
-    def build_C_matrix(self, C_func, n):
-        v = np.zeros(n)
-        C_cols = []
-        for i in range(n):
-            v[:] = 0
-            v[i] = 1
-            C_cols.append(C_func(v).copy())
-        return np.column_stack(C_cols)
-
-    # def seem_eig_shift(self, shift):
-        
-    #     n = self.gdata.m ** 2
-    #     Cmat = self.build_C_matrix(lambda w: self.C_shift(w, shift), n)
-    #     S = np.eye(n)
-    #     Sinv = np.eye(n)
-    #     M = Cmat @ Sinv @ Cmat.T
-    #     b = np.zeros(M.shape[0])
-    #     lam = np.linalg.solve(M, b)
-    #     u = Sinv @ Cmat.T @ lam
-    #     return u
-
 
 
     def rq_int_iter_eig(self, l, u0=None, tol=1e-6, max_iter=100, eigenfunctions=None):
@@ -237,31 +215,28 @@ class RayleighOperator:
         rhs_b = np.zeros(self.gdata.p)
         rhs_i = np.ones(self.gdata.k)
         rhs = np.hstack((rhs_i, rhs_b))
-        
+
         for iteration in range(1, max_iter + 1):
             u_new = self.qrSolve_shift(rhs, shift, l)
-            # u_new = self.seem_eig_shift(shift)
             Cu = self.C_shift(u_new, shift)
-            u_new = u_new.astype(np.float64)
-            u_new /= np.linalg.norm(u_new)
-            
-            
-            cu_res= np.linalg.norm(Cu - rhs)/np.linalg.norm(rhs) 
+
+            cu_res = np.linalg.norm(Cu - rhs) / np.linalg.norm(rhs)
             print(f"Relative constraint residual (||Cu - rhs||/||rhs||): {cu_res:.2e}")
 
-
-            
             if eigenfunctions:
                 u_new = self.orthogonalize(u_new, eigenfunctions)
-            
+
+            u_new /= np.linalg.norm(u_new)
+
             au_new = self.a_u(u_new, l)
             shift_new = self.rq_int(u_new, au_new)
 
-            res1 = np.linalg.norm(u_new - u)
-            res2 = np.linalg.norm(u_new + u)
+            res1 = np.linalg.norm(u_new - u) / np.linalg.norm(u_new)
+            res2 = np.linalg.norm(u_new + u) / np.linalg.norm(u_new)
+
 
             print(
-                f"Iteration {iteration}: Shift={shift_new:.8f}, Residual1={res1:.2e}, Residual2={res2:.2e}"
+                f"Iteration {iteration}: Shift={shift_new:.8f},||u_new - u||/||u_new||={res1:.2e}, ||u_new + u||/||u_new||={res2:.2e}"
             )
 
             if res1 < tol or res2 < tol:
@@ -274,7 +249,6 @@ class RayleighOperator:
             u_grid = u.reshape(self.gdata.m, self.gdata.m)
             rhs_i = u_grid[self.gdata.flag]
             rhs = np.hstack((rhs_i, rhs_b))
-            
 
         print("Maximum iterations reached.")
         return u, shift, iteration

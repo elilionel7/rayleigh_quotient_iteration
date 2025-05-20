@@ -29,7 +29,7 @@ def main():
     print("Starting Rayleigh Quotient Iteration with Valid Eigenfunction...")
 
     results = dict()
-    results["p"] = [1]  # Polynomial degrees
+    results["p"] = [2]  # Polynomial degrees
     results["pts"] = [30, 40, 50]  # Grid resolutions
     num_eigfuncs = 3
 
