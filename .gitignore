@@ -13,3 +13,4 @@ make_graph_rq.py
 make_chart_rq.py
 rq_operator.py
 report.tex
+*.png
