@@ -111,9 +111,9 @@ class RayleighOperator:
     def a_u(self, u, l):
         u = self.ker(u, l)
         w = np.reshape(u, (self.gdata.m, self.gdata.m))
-        Au_full_grid = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
-        Au_full_grid[~self.gdata.flag] = 0
-        return Au_full_grid.flatten()
+        Au = self.lap(w) + np.transpose(self.lap(np.transpose(w)))
+        Au[~self.gdata.flag] = 0
+        return Au.flatten()
 
     def interpolate_solution(self, x, y, sols):
         x = x.flatten()
@@ -134,7 +134,7 @@ class RayleighOperator:
         y = np.unique(y)
         sols_grid = sols.reshape(len(x), len(y))
         interp_func = RegularGridInterpolator(
-            (x, y), sols_grid, method="cubic", bounds_error=False, fill_value=None
+            (x, y), sols_grid, method="linear", bounds_error=False, fill_value=None
         )
 
         def interpolator(xi, yi):
@@ -142,7 +142,6 @@ class RayleighOperator:
             yi = np.asarray(yi).flatten()
             interp_points = np.column_stack((xi, yi))
             zi = interp_func(interp_points)
-            zi = np.nan_to_num(zi, nan=0.0)
             return zi
 
         return interpolator
@@ -186,39 +185,21 @@ class RayleighOperator:
 
     
 
-    # def rq_int(self, u, Au):
-    #     eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
-    #     weights = self.gdata.weights
-    #     Au = Au.flatten()
-    #     Au_interp_func = self.interpolate_solution1(
-    #         self.gdata.x1, self.gdata.x2, u * Au
-    #     )
-    #     Au_eval = Au_interp_func(eval_xi, eval_yi)
-    #     u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * u)
-    #     uu_eval = u_interp_func(eval_xi, eval_yi)
-    #     numerator = np.sum(weights * Au_eval)
-    #     denominator = np.sum(weights * uu_eval)
-    #     return numerator / denominator
+    def rq_int0(self, u, Au):
+        eval_xi, eval_yi = self.gdata.eval_xi, self.gdata.eval_yi
+        weights = self.gdata.weights
+        Au = Au.flatten()
+        Au_interp_func = self.interpolate_solution1(
+            self.gdata.x1, self.gdata.x2, u * Au
+        )
+        Au_eval = Au_interp_func(eval_xi, eval_yi)
+        u_interp_func = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u * u)
+        uu_eval = u_interp_func(eval_xi, eval_yi)
+        numerator = np.sum(weights * Au_eval)
+        denominator = np.sum(weights * uu_eval)
+        return numerator / denominator
 
-    # def rq_int(self, u, Au):
-    #     """Compute λ ≈ mean(Au/u)   (Dirichlet nodes are skipped)."""
-
-    #     # 1. interpolate u and Au onto the polar quadrature nodes
-    #     u_interp  = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, u)
-    #     Au_interp = self.interpolate_solution1(self.gdata.x1, self.gdata.x2, Au)
-
-    #     u_q   = u_interp (self.gdata.eval_xi, self.gdata.eval_yi)
-    #     Au_q  = Au_interp(self.gdata.eval_xi, self.gdata.eval_yi)
-
-    #     # 2. avoid division-by-zero: mask points where |u| is tiny
-    #     mask        = np.abs(u_q) > 1e-12
-    #     Au_over_u   = np.zeros_like(u_q)
-    #     Au_over_u[mask] = Au_q[mask] / u_q[mask]
-
-    #     # 3. weighted mean over the remaining points
-    #     w = self.gdata.weights
-    #     return np.sum(w * Au_over_u) / np.sum(w[mask])
-
+    
     def rq_int(self, u, Au):
         
         m = self.gdata.m
@@ -226,9 +207,8 @@ class RayleighOperator:
         Au_grid = Au.reshape(m, m)
         u_interior = u_grid[self.gdata.flag]
         Au_interior = Au_grid[self.gdata.flag]
-        ratios = Au_interior / u_interior
-        mask = u_interior != 0
-        rq = np.mean(ratios[mask])
+        rq =  np.mean(Au_interior / u_interior)
+
         return rq
 
 
@@ -246,6 +226,7 @@ class RayleighOperator:
         u = u0.astype(np.float64)
         au = self.a_u(u, l)
         shift = self.rq_int(u, au)
+        
 
         u_grid = u.reshape(self.gdata.m, self.gdata.m)
         rhs_i  = u_grid[self.gdata.flag]      
@@ -266,7 +247,7 @@ class RayleighOperator:
 
             au_new = self.a_u(u_new, l)
             shift_new = self.rq_int(u_new, au_new)
-
+            
             res1 = np.linalg.norm(u_new - u) / np.linalg.norm(u_new)
             res2 = np.linalg.norm(u_new + u) / np.linalg.norm(u_new)
 
