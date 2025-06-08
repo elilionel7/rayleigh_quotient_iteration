@@ -120,9 +120,9 @@ class RayleighOperator:
         theta = np.arctan2(y, x)
         if mode == 1:
             guess = np.sin(np.pi * r / 0.95)
-        elif mode == 2:
+        elif mode == 4:
             guess = np.sin(2 * np.pi * r / 0.95) * np.cos(theta)
-        elif mode == 3:
+        elif mode == 5:
             guess = np.sin(3 * np.pi * r / 0.95) * np.sin(theta)
         else:
             guess = np.random.rand(*r.shape)
